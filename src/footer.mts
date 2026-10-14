@@ -1,4 +1,5 @@
-import { fullSummary, format } from "./formatter.mjs";
+// @ts-nocheck
+import { fullSummary, format } from "./formatter.mts";
 export const STATUS_KEY = "footer-compositor:right:0:tmux-monitor";
 const PREFIX = "footer-compositor:dynamic:";
 // Structural protocol inspected in pi-footer-compositor's implementation.

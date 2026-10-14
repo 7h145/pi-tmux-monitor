@@ -1,7 +1,8 @@
+// @ts-nocheck
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { STATES } from "./protocol.mjs";
+import { STATES } from "./protocol.mts";
 export const DEFAULT_THEME = {
   overflow: "…",
   states: Object.fromEntries(

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { visibleWidth } from "@earendil-works/pi-tui";
 // Pure presentation: slots (creation order), resolved config, current Pi theme,
 // allocated columns -> {text, mode}. See README's formatter contract.

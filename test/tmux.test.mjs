@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Tmux } from "../src/tmux.mjs";
-import { JOB, PI } from "../src/protocol.mjs";
-import { parseCLI, launch, helperPath, reporterPath } from "../src/launch.mjs";
+import { Tmux } from "../src/tmux.mts";
+import { JOB, PI } from "../src/protocol.mts";
+import { parseCLI, launch, helperPath, reporterPath } from "../src/launch.mts";
 import { job } from "./fixtures.mjs";
 async function server(fn) {
   const dir = await mkdtemp(join(tmpdir(), "monitor-tmux-")),
@@ -454,8 +454,8 @@ test("actual RPC Pi reports without a TUI observer and retires on stdin EOF", as
   }));
 test("observer does not exclude a reused own-pane ID on a replacement server", async () =>
   server(async ({ dir, socket, tmux }) => {
-    const { Observer } = await import("../src/observer.mjs"),
-      { DEFAULTS } = await import("../src/config.mjs");
+    const { Observer } = await import("../src/observer.mts"),
+      { DEFAULTS } = await import("../src/config.mts");
     const pid = await tmux.call("display-message", "-p", "#{pid}");
     const observer = new Observer({
       cwd: dir,

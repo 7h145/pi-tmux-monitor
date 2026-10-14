@@ -1,9 +1,10 @@
+// @ts-nocheck
 import { resolve } from "node:path";
 import { realpath, readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { Tmux } from "./tmux.mjs";
-import { parseTmux } from "./protocol.mjs";
-import { Reconciler, eligible } from "./reconcile.mjs";
+import { Tmux } from "./tmux.mts";
+import { parseTmux } from "./protocol.mts";
+import { Reconciler, eligible } from "./reconcile.mts";
 export async function legacySession(pid = process.pid) {
   try {
     const stat = await readFile(`/proc/${pid}/stat`, "utf8");

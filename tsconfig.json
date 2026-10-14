@@ -4,10 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": false,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["pi-tmux-monitor.ts", "src/**/*.mjs"]
+  "include": ["pi-tmux-monitor.ts", "src/**/*.mts", "src/**/*.mjs"]
 }

@@ -110,7 +110,7 @@ The helper never writes completion sentinels or reads task results; zero exit al
 is not delegated-task correctness.
 
 Another launcher can use the same recipes without either skill. Full custom
-protocol adaptation is described in `../../README.md` and `../../src/protocol.mjs`.
+protocol adaptation is described in `../../README.md` and `../../src/protocol.mts`.
 Do not modify installed skills or another product unless separately authorized.
 
 Commands execute where the tmux server runs. Shared socket access is not proof

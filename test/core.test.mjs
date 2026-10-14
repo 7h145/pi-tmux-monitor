@@ -4,11 +4,11 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
-import { DEFAULTS, applyLayer, loadConfig } from "../src/config.mjs";
-import { format, fullSummary } from "../src/formatter.mjs";
-import { STATES, parseRecord, parseTmux, lineage } from "../src/protocol.mjs";
-import { Reconciler, eligible } from "../src/reconcile.mjs";
-import { parseCLI, piArgs, quote } from "../src/launch.mjs";
+import { DEFAULTS, applyLayer, loadConfig } from "../src/config.mts";
+import { format, fullSummary } from "../src/formatter.mts";
+import { STATES, parseRecord, parseTmux, lineage } from "../src/protocol.mts";
+import { Reconciler, eligible } from "../src/reconcile.mts";
+import { parseCLI, piArgs, quote } from "../src/launch.mts";
 const theme = { fg: (_, s) => `\x1b[32m${s}\x1b[39m` };
 import { job, reporter } from "./fixtures.mjs";
 const pane = (j = null, r = null, patch = {}) => ({

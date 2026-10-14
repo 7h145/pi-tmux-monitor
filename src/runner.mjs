@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import { access } from "node:fs/promises";
-import { Tmux } from "./tmux.mjs";
-import { parseTmux } from "./protocol.mjs";
-import { reporterPath } from "./launch.mjs";
+import { Tmux } from "./tmux.mts";
+import { parseTmux } from "./protocol.mts";
+import { reporterPath } from "./launch.mts";
 export async function run(plan, env = process.env) {
   const socket = parseTmux(env.TMUX),
     pane = env.TMUX_PANE;

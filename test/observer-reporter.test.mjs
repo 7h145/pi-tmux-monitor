@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Observer, legacySession } from "../src/observer.mjs";
-import { Reporter } from "../src/reporter.mjs";
-import { DEFAULTS } from "../src/config.mjs";
+import { Observer, legacySession } from "../src/observer.mts";
+import { Reporter } from "../src/reporter.mts";
+import { DEFAULTS } from "../src/config.mts";
 import { job, reporter } from "./fixtures.mjs";
 function memory() {
   const records = new Map(),

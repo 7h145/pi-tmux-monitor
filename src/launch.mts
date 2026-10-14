@@ -1,9 +1,10 @@
+// @ts-nocheck
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { access } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { lineage } from "./protocol.mjs";
-import { Tmux } from "./tmux.mjs";
+import { lineage } from "./protocol.mts";
+import { Tmux } from "./tmux.mts";
 export const packageRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",

@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const JOB = "@pi-tmux-monitor-job";
 export const PI = "@pi-tmux-monitor-pi";
 export const OWNER = "@pi-tmux-monitor-owner";

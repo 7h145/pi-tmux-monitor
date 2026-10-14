@@ -1,6 +1,22 @@
 #!/usr/bin/env node
-import { parseCLI, launch } from "../src/launch.mjs";
-import { run } from "../src/runner.mjs";
+import { registerHooks } from "node:module";
+import { readFileSync } from "node:fs";
+// Shared helper modules are plain JavaScript. Load only this package's .mts
+// sources as JavaScript, including when installed beneath node_modules.
+const sourceRoot = new URL("../src/", import.meta.url).href;
+registerHooks({
+  load(url, context, nextLoad) {
+    if (url.startsWith(sourceRoot) && url.endsWith(".mts"))
+      return {
+        format: "module",
+        source: readFileSync(new URL(url), "utf8"),
+        shortCircuit: true,
+      };
+    return nextLoad(url, context);
+  },
+});
+const { parseCLI, launch } = await import("../src/launch.mts");
+const { run } = await import("../src/runner.mjs");
 const argv = process.argv.slice(2);
 const delimiter = argv.indexOf("--");
 const helperArgs = delimiter < 0 ? argv : argv.slice(0, delimiter);

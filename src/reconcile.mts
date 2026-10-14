@@ -1,4 +1,5 @@
-import { matches } from "./protocol.mjs";
+// @ts-nocheck
+import { matches } from "./protocol.mts";
 export class Reconciler {
   constructor(staleAfterMs) {
     this.staleAfterMs = staleAfterMs;

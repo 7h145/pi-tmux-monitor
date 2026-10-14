@@ -1,7 +1,8 @@
+// @ts-nocheck
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { realpath, stat } from "node:fs/promises";
-import { JOB, PI, OWNER, parseRecord } from "./protocol.mjs";
+import { JOB, PI, OWNER, parseRecord } from "./protocol.mts";
 const exec = promisify(execFile);
 export class Tmux {
   constructor(socket, timeout = 1000) {

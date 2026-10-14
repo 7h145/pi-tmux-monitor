@@ -1,6 +1,7 @@
+// @ts-nocheck
 import { randomUUID } from "node:crypto";
-import { Tmux } from "./tmux.mjs";
-import { parseTmux, matches } from "./protocol.mjs";
+import { Tmux } from "./tmux.mts";
+import { parseTmux, matches } from "./protocol.mts";
 const key = Symbol.for("pi-tmux-monitor.process.v1");
 const processState = (globalThis[key] ??= { id: randomUUID(), last: null });
 export class Reporter {

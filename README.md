@@ -244,12 +244,18 @@ static fallback on the next poll.
 
 ## Architecture and adaptation
 
-- `src/tmux.mjs` handles bounded tmux operations and local-option discovery.
-- `src/protocol.mjs` validates bounded versioned JSON metadata.
-- `src/observer.mjs` selects one server, caches inventory and manages scans.
-- `src/reconcile.mjs` applies ownership, generation and freshness policy.
-- `src/reporter.mjs` observes this Pi's lifecycle; `src/runner.mjs` tracks a command.
-- `src/formatter.mjs` is pure presentation; `src/footer.mjs` adapts the compositor.
+Extension-loaded source modules use `.mts` so Pi's TypeScript loader refreshes the
+whole module graph on `/reload`, including edited dependencies. Shared helper
+modules retain plain JavaScript syntax. The standalone Node helper uses a scoped
+load hook for this package's `.mts` files, so it needs no compiler or build step
+and also works when the package is installed beneath `node_modules`.
+
+- `src/tmux.mts` handles bounded tmux operations and local-option discovery.
+- `src/protocol.mts` validates bounded versioned JSON metadata.
+- `src/observer.mts` selects one server, caches inventory and manages scans.
+- `src/reconcile.mts` applies ownership, generation and freshness policy.
+- `src/reporter.mts` observes this Pi's lifecycle; `src/runner.mjs` tracks a command.
+- `src/formatter.mts` is pure presentation; `src/footer.mts` adapts the compositor.
 - `pi-tmux-monitor.ts` wires public Pi lifecycle events and diagnostics.
 
 Only runners write `@pi-tmux-monitor-job`; only this Pi reporter writes

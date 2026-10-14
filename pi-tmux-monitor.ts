@@ -2,11 +2,11 @@ import {
   getAgentDir,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import { loadConfig } from "./src/config.mjs";
-import { Reporter } from "./src/reporter.mjs";
-import { Observer } from "./src/observer.mjs";
-import { FooterAdapter, STATUS_KEY } from "./src/footer.mjs";
-import { helperPath } from "./src/launch.mjs";
+import { loadConfig } from "./src/config.mts";
+import { Reporter } from "./src/reporter.mts";
+import { Observer } from "./src/observer.mts";
+import { FooterAdapter, STATUS_KEY } from "./src/footer.mts";
+import { helperPath } from "./src/launch.mts";
 const BEGIN = "<pi-tmux-monitor-launch-context>",
   END = "</pi-tmux-monitor-launch-context>";
 export function replaceContext(existing: string, block: string) {

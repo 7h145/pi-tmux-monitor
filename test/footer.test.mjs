@@ -8,9 +8,9 @@ import {
   initTheme,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
-import { FooterAdapter, STATUS_KEY } from "../src/footer.mjs";
-import { DEFAULTS } from "../src/config.mjs";
-import { format, fullSummary } from "../src/formatter.mjs";
+import { FooterAdapter, STATUS_KEY } from "../src/footer.mts";
+import { DEFAULTS } from "../src/config.mts";
+import { format, fullSummary } from "../src/formatter.mts";
 initTheme("dark", false);
 const source =
   process.env.PI_MONITOR_COMPOSITOR ??

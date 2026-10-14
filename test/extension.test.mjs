@@ -4,9 +4,9 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import monitor, { replaceContext } from "../pi-tmux-monitor.ts";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
-import { Tmux } from "../src/tmux.mjs";
-import { STATUS_KEY } from "../src/footer.mjs";
-import { parseCLI, launch } from "../src/launch.mjs";
+import { Tmux } from "../src/tmux.mts";
+import { STATUS_KEY } from "../src/footer.mts";
+import { parseCLI, launch } from "../src/launch.mts";
 const saved = { ...process.env };
 async function scenario(fn) {
   const dir = await mkdtemp("/tmp/monitor-extension-"),
