@@ -1,6 +1,6 @@
 {
   "name": "pi-tmux-monitor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Truthful tmux workload awareness for Pi",
   "type": "module",
   "engines": {
