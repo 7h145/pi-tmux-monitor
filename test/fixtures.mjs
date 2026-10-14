@@ -1,0 +1,27 @@
+export const job = (patch = {}) => ({
+  v: 1,
+  paneId: "%1",
+  jobId: "j",
+  ownerSessionId: "owner",
+  ancestors: ["root", "owner"],
+  kind: "batch",
+  runtime: "command",
+  phase: "running",
+  heartbeatSeq: 1,
+  exitCode: null,
+  ...patch,
+});
+export const reporter = (patch = {}) => ({
+  v: 1,
+  paneId: "%1",
+  instanceId: "r",
+  processInstanceId: "p",
+  sessionId: "child",
+  kind: "interactive",
+  jobId: null,
+  parentSessionId: "owner",
+  ancestors: ["root", "owner"],
+  state: "idle",
+  heartbeatSeq: 1,
+  ...patch,
+});

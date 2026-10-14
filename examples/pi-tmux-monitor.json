@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "scope": "descendants",
+  "includeUnregistered": true,
+  "socketPath": null,
+  "ownedSessions": [],
+  "pollIntervalMs": 2000,
+  "heartbeatIntervalMs": 5000,
+  "staleAfterMs": 15000,
+  "tmuxTimeoutMs": 1000,
+  "summaryOrder": [
+    "failed",
+    "active",
+    "idle",
+    "service",
+    "success",
+    "unknown",
+    "unregistered"
+  ],
+  "partialOrder": [
+    "failed",
+    "active",
+    "unknown",
+    "unregistered",
+    "service",
+    "idle",
+    "success"
+  ],
+  "activeTheme": "default",
+  "themes": {
+    "default": {
+      "overflow": "…",
+      "states": {
+        "idle": {
+          "glyph": "_",
+          "fg": "dim"
+        },
+        "active": {
+          "glyph": "R",
+          "fg": "accent"
+        },
+        "service": {
+          "glyph": "S",
+          "fg": "muted"
+        },
+        "success": {
+          "glyph": "+",
+          "fg": "success"
+        },
+        "failed": {
+          "glyph": "!",
+          "fg": "error"
+        },
+        "unknown": {
+          "glyph": "?",
+          "fg": "warning"
+        },
+        "unregistered": {
+          "glyph": ":",
+          "fg": "dim"
+        }
+      }
+    },
+    "gaudy": {
+      "overflow": "…",
+      "states": {
+        "idle": {
+          "glyph": "·",
+          "fg": "dim"
+        },
+        "active": {
+          "glyph": "●",
+          "fg": "accent"
+        },
+        "service": {
+          "glyph": "◇",
+          "fg": "muted"
+        },
+        "success": {
+          "glyph": "✓",
+          "fg": "success"
+        },
+        "failed": {
+          "glyph": "!",
+          "fg": "error"
+        },
+        "unknown": {
+          "glyph": "?",
+          "fg": "warning"
+        },
+        "unregistered": {
+          "glyph": "○",
+          "fg": "dim"
+        }
+      }
+    }
+  }
+}

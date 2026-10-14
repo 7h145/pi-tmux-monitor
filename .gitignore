@@ -1,0 +1,13 @@
+# Dependencies and caches
+node_modules/
+.cache/
+
+# Generated output
+/dist/
+/build/
+/coverage/
+*.tsbuildinfo
+
+# Logs and npm package archives
+*.log
+/*.tgz

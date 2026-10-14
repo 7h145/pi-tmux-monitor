@@ -1,0 +1,45 @@
+{
+  "name": "pi-tmux-monitor",
+  "version": "0.1.0",
+  "description": "Truthful tmux workload awareness for Pi",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "keywords": [
+    "pi-package",
+    "tmux"
+  ],
+  "pi": {
+    "extensions": [
+      "./pi-tmux-monitor.ts"
+    ],
+    "skills": [
+      "./skills/pi-tmux-monitor"
+    ]
+  },
+  "bin": {
+    "pi-tmux-monitor": "./scripts/pi-tmux-monitor.mjs"
+  },
+  "files": [
+    "pi-tmux-monitor.ts",
+    "src",
+    "scripts",
+    "skills",
+    "examples",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "scripts": {
+    "test": "node --import ./test/host-peers.mjs --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.3"
+  }
+}
