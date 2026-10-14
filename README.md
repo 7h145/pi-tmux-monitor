@@ -396,18 +396,28 @@ Tests use host-provided Pi packages rather than duplicate runtime copies. Set
 `PI_MONITOR_HOST_ROOT` to the installed coding-agent package directory if it is not
 `/usr/local/lib/node_modules/@earendil-works/pi-coding-agent`. Set
 `PI_MONITOR_COMPOSITOR` to its actual `.ts` entry to run the real integration check;
-that check is explicitly skipped when the source is unavailable. Runtime peers
+those tests skip when the source is absent locally. Set
+`PI_MONITOR_REQUIRE_COMPOSITOR=1` to fail instead of skipping. Runtime peers
 remain supplied by Pi. To type-check without installing duplicate runtime peers:
 
 ```bash
 npm ci --legacy-peer-deps
-HOST=/absolute/path/to/installed/pi-coding-agent
-mkdir -p node_modules/@earendil-works
-ln -s "$HOST" node_modules/@earendil-works/pi-coding-agent
-ln -s "$HOST/node_modules/@earendil-works/pi-tui" node_modules/@earendil-works/pi-tui
+export PI_MONITOR_HOST_ROOT=/absolute/path/to/installed/pi-coding-agent
+node test/setup-peers.mjs
 npm run check
 ```
 
-Adjust the TUI link to your host's actual package location if its dependencies
-are arranged differently. Broader compatibility and live provider-backed runs have
-not been validated.
+The setup script resolves TUI through the host package, including hoisted
+installations, and refuses to overwrite a different existing peer.
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes, pull requests and manual
+requests on Ubuntu with Node 22.19.0 and 26.10.0. It installs tmux and one Pi 1.1.0
+test host from [`test/host/package-lock.json`](test/host/package-lock.json),
+links the development types to that host, checks out the pinned real compositor,
+runs `npm run check` and checks package contents. The private test-host manifest
+keeps Pi SDK dependencies on the same release; the lockfile fixes their complete
+installation. Missing compositor
+source fails CI instead of silently skipping integration tests. Tests use
+isolated tmux sockets and offline Pi startup; no provider credentials are needed.
+
+Broader compatibility and live provider-backed runs have not been validated.

@@ -11,3 +11,6 @@ node_modules/
 # Logs and npm package archives
 *.log
 /*.tgz
+
+# CI-only dependency checkout
+/.ci-deps/

@@ -6,7 +6,6 @@ import {
   readFile,
   writeFile,
   rm,
-  access,
   cp,
   readdir,
 } from "node:fs/promises";
@@ -14,16 +13,10 @@ import { join } from "node:path";
 import { Tmux } from "../src/tmux.mts";
 import { parseCLI, launch } from "../src/launch.mts";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { compositorSource } from "./compositor-source.mjs";
 import { STATUS_KEY } from "../src/footer.mts";
-const source =
-  process.env.PI_MONITOR_COMPOSITOR ??
-  "/root/.local/share/pi/agent/packages/git/github.com/7h145/pi-footer-compositor/pi-footer-compositor.ts";
-let available = true;
-try {
-  await access(source);
-} catch {
-  available = false;
-}
+const source = await compositorSource();
+const available = source !== null;
 async function until(fn) {
   for (let i = 0; i < 150; i++) {
     const value = await fn();

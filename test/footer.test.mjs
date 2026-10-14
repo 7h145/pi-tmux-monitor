@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import {
   FooterComponent,
   createEventBus,
@@ -9,19 +9,16 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { FooterAdapter, STATUS_KEY } from "../src/footer.mts";
+import { compositorSource } from "./compositor-source.mjs";
 import { DEFAULTS } from "../src/config.mts";
 import { format, fullSummary } from "../src/formatter.mts";
 initTheme("dark", false);
-const source =
-  process.env.PI_MONITOR_COMPOSITOR ??
-  "/root/.local/share/pi/agent/packages/git/github.com/7h145/pi-footer-compositor/pi-footer-compositor.ts";
-let compositor;
-try {
-  await access(source);
-  compositor = (await import(pathToFileURL(source).href)).default;
-} catch (e) {
-  if (e.code !== "ENOENT") throw e;
-}
+const source = await compositorSource();
+const compositor = source
+  ? (await import(pathToFileURL(source).href)).default
+  : undefined;
+if (source && typeof compositor !== "function")
+  throw Error("Compositor test dependency must export an extension factory");
 const prefix = "footer-compositor:dynamic:";
 const example = JSON.parse(
   await readFile(
