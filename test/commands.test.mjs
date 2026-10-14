@@ -158,7 +158,7 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
     const data = collectSnapshot(current(config));
     const inspected = {
       command: "tmux -S '.agents/run/socket' attach -t '$0'",
-      hint: "Ctrl+b (or Alt+x), then s opens the session tree and pane previews.",
+      hint: "In tmux: Ctrl+b (or Alt+x), then s opens the session tree and pane previews.",
     };
     const output = commandHelp(ctx, data, inspected, 140);
     const plain = stripTerminalSequences(output);
@@ -185,10 +185,18 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
         }),
       );
     }
-    assert.ok(plain.includes(inspected.command));
+    assert.ok(
+      plain.includes(
+        `Run from the project root:\n\n ${inspected.command}\n\n${inspected.hint}`,
+      ),
+    );
     assert.ok(!plain.includes("choose-tree"));
     assert.ok(!plain.includes("Scope:"));
     assert.ok(!plain.includes('"slots"'));
+    assert.deepEqual(plain.split("Notes:\n")[1].split("\n"), [
+      " • tmux-monitor never controls workloads or attaches to a tmux session.",
+      " • Status shows cached data, refreshed automatically in the background.",
+    ]);
     assert.notEqual(
       commandHelp({ ...ctx, ui: { theme: theme(35) } }, data, inspected, 140),
       output,
@@ -240,6 +248,9 @@ test("tables escape labels/glyphs and mark missing identity, configuration and i
     commandHelp(ctx, data, { reason: "No target", hint: "Prefix+s" }),
   );
   assert.ok(help.includes("active configuration unavailable"));
+  assert.ok(help.includes("Terminal inspection:\nNo target\n\nNotes:"));
+  assert.ok(!help.includes("Prefix+s"));
+  assert.ok(!help.includes("In tmux:"));
   assert.ok(help.startsWith("tmux-monitor:"));
   assert.ok(!help.includes(" v"));
 });

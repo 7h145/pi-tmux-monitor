@@ -51,7 +51,7 @@ test("outside tmux: exact owned-session verification, relative path, quoting and
   fixture(async ({ cwd, tmux, current }) => {
     assert.ok(
       (await inspectionHint(current, cwd, () => tmux)).hint.startsWith(
-        "Ctrl+b, then s",
+        "In tmux: Ctrl+b, then s",
       ),
     );
     await tmux.call("set-option", "-g", "prefix", "C-b");
@@ -67,7 +67,7 @@ test("outside tmux: exact owned-session verification, relative path, quoting and
     assert.equal(result.command, `tmux -S '.agents/run/socket' attach -t '$0'`);
     assert.equal(
       result.hint,
-      "Ctrl+c (or Alt+x), then s opens the session tree and pane previews.",
+      "In tmux: Ctrl+c (or Alt+x), then s opens the session tree and pane previews.",
     );
     assert.ok(
       calls.every((args) =>
@@ -125,9 +125,9 @@ test("absent, ambiguous and changed session ownership yield no fabricated target
       ...current,
       observer: { ...current.observer, slots: [] },
     };
-    assert.ok(
-      (await inspectionHint(noSlots, cwd)).reason.includes("No associated"),
-    );
+    const unavailable = await inspectionHint(noSlots, cwd);
+    assert.ok(unavailable.reason.includes("No associated"));
+    assert.equal(unavailable.hint, undefined);
     await tmux.call("new-session", "-d", "-s", "another");
     await tmux.write("owner", "$1", {
       v: 1,
@@ -170,6 +170,6 @@ test("prefix lookup failure retains a verified attachment command with only a ge
     assert.ok(result.command);
     assert.equal(
       result.hint,
-      "Prefix+s opens the session tree and pane previews.",
+      "In tmux: Prefix+s opens the session tree and pane previews.",
     );
   }));

@@ -327,7 +327,7 @@ for (const [mode, activeTheme, producerFirst] of [
         await tmux.call("send-keys", "-t", pane, "/tmux-monitor h", "Enter");
         await new Promise((r) => setTimeout(r, 100));
         await until(async () =>
-          (await snapshot()).includes("Attachment is manual"),
+          (await snapshot()).includes("tmux-monitor never controls workloads"),
         );
         for (const line of (
           await tmux.call("capture-pane", "-p", "-t", pane)

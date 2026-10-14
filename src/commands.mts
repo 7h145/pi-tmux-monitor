@@ -126,14 +126,18 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
     "",
     strong(ctx, "Terminal inspection:"),
     ...(inspection.command
-      ? ["Run from the project root:", inspection.command]
+      ? [
+          "Run from the project root:",
+          "",
+          ` ${inspection.command}`,
+          "",
+          inspection.hint,
+        ]
       : [inspection.reason]),
-    inspection.hint,
     "",
     strong(ctx, "Notes:"),
-    " • Commands are read-only. Status uses cached data, not a forced scan.",
-    " • Running is liveness, not activity. Idle and successful exits do not prove task completion.",
-    " • Attachment is manual; the monitor never attaches or controls workloads.",
+    " • tmux-monitor never controls workloads or attaches to a tmux session.",
+    " • Status shows cached data, refreshed automatically in the background.",
   ].join("\n");
 }
 
