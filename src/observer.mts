@@ -41,28 +41,46 @@ export class Observer {
     this.running = false;
     this.retired = false;
     this.degraded = false;
+    this.lastSuccessfulScanAt = null;
     this.socket = config.socketPath;
     this.selection = this.socket ? "explicit" : null;
+  }
+  discardInventory() {
+    this.cache = [];
+    const changed = this.slots.length > 0;
+    this.slots = [];
+    this.lastSuccessfulScanAt = null;
+    this.reconciler = new Reconciler(this.config.staleAfterMs, this.diagnostic);
+    if (changed) this.publish(this.slots);
+  }
+  inventoryAge(now = this.clock()) {
+    return this.lastSuccessfulScanAt === null
+      ? null
+      : now - this.lastSuccessfulScanAt;
+  }
+  expire(now = this.clock()) {
+    if (this.retired) return;
+    const slots = this.reconciler.expire(this.cache, now);
+    if (slots.some((p, i) => p.state !== this.slots[i]?.state)) {
+      this.slots = slots;
+      this.publish(this.slots);
+    }
   }
   async select() {
     if (["explicit", "project"].includes(this.selection)) return;
     const project = resolve(this.cwd, ".agents/run/tmux-socket");
     try {
       await this.tmuxFactory(project, this.config.tmuxTimeoutMs).identity();
+      if (this.retired) return;
       if (this.socket !== project) {
-        this.cache = [];
-        this.slots = [];
+        this.discardInventory();
         this.identity = undefined;
-        this.reconciler = new Reconciler(
-          this.config.staleAfterMs,
-          this.diagnostic,
-        );
       }
       this.socket = project;
       this.selection = "project";
       return;
     } catch {}
-    if (!this.socket) {
+    if (!this.socket && !this.retired) {
       this.socket = parseTmux(this.env.TMUX);
       this.selection = this.socket ? "inherited" : null;
     }
@@ -77,15 +95,10 @@ export class Observer {
         identity = await tmux.identity();
       if (this.retired) return;
       if (this.identity !== identity) {
-        this.cache = [];
-        this.slots = [];
-        this.reconciler = new Reconciler(
-          this.config.staleAfterMs,
-          this.diagnostic,
-        );
+        this.discardInventory();
         this.identity = identity;
       }
-      const panes = await tmux.inventory(this.diagnostic);
+      const panes = await tmux.inventory(this.diagnostic, this.clock);
       if (this.retired) return;
       let ownPane = null;
       const ownEnvironment = /^(.*),(\d+),(\d+)$/.exec(this.env.TMUX ?? "");
@@ -103,14 +116,16 @@ export class Observer {
       this.cache = panes.filter((p) =>
         eligible(p, this.owner, this.config, ownPane, legacy),
       );
-      this.slots = this.reconciler.reconcile(this.cache, this.clock());
+      const completedAt = this.clock();
+      this.slots = this.reconciler.reconcile(this.cache, completedAt);
+      this.lastSuccessfulScanAt = completedAt;
       this.degraded = false;
       this.publish(this.slots);
     } catch {
       if (this.retired) return;
       this.reconciler.disconnect();
       this.degraded = true;
-      this.slots = this.reconciler.reconcile(this.cache, this.clock());
+      this.slots = this.reconciler.expire(this.cache, this.clock());
       this.diagnostic(
         "Monitor server unavailable; cached inventory may be stale",
       );
@@ -120,12 +135,14 @@ export class Observer {
     }
   }
   async start() {
+    if (this.retired || this.timer !== undefined) return;
+    // Start the existing poll timer before awaiting even the initial scan.
+    this.timer = setInterval(() => {
+      if (this.retired) return;
+      this.expire();
+      if (!this.running) void this.scan();
+    }, this.config.pollIntervalMs);
     await this.scan();
-    if (!this.retired)
-      this.timer = setInterval(
-        () => void this.scan(),
-        this.config.pollIntervalMs,
-      );
   }
   stop() {
     this.retired = true;

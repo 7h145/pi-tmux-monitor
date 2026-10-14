@@ -59,6 +59,14 @@ unavailable, not inferred from commands or output. Tables are rendered for the
 terminal width at invocation; narrow views use labelled fields rather than cramped
 columns. Run the command again after resizing to refresh its layout.
 
+Status never starts or waits for an inventory scan. It first expires stale cached
+live evidence and updates the footer. When the last successful scan is at least
+`staleAfterMs` old, it shows a separate line above the rows, for example
+`Cached inventory — last successful scan 32s ago.` This also appears for an empty
+cache. If no scan has succeeded, status says so; observation failures are reported
+immediately, without waiting for this age threshold. The age describes that
+snapshot and does not update after the notice is displayed.
+
 | Command | Alias | View |
 |---|---|---|
 | `/tmux-monitor status` | `s` | All cached pane rows; the default view |
@@ -115,8 +123,19 @@ precedence over application state.
 Each live source starts unconfirmed until its sequence advances, independently
 of other sources. Without other trustworthy evidence, display **unknown**. With
 defaults, confirmation can take one 5-second heartbeat plus a 2-second scan.
-Sources become stale after 15 seconds without advancement. Command outcomes do
-not expire while the pane remains and no reuse is known. On disconnection, eligible
+Sources become stale after 15 seconds without advancement. The existing poll
+timer checks cached evidence even while an inventory scan is pending, including
+during initial observation. Changed states update both the dynamic footer and
+static fallback without extra tmux queries or overlapping scans. Records are
+timed when received, so completing a slow scan does not extend their freshness.
+
+The same `staleAfterMs` controls the status scan-age notice, but its clock is
+independent of heartbeat progress. Successful scans, including unchanged or empty
+inventories, renew scan age; failures, pending scans and viewing the cache do not.
+Changing the inventory namespace clears its scan age.
+
+Command outcomes do not expire while the pane remains and no reuse is known.
+On disconnection, eligible
 cached slots remain: live states are unknown, known outcomes remain, and
 `/tmux-monitor diagnostics` reports degraded observation. Cached slots do not prove that panes
 still exist. A replacement server starts a new inventory namespace.
@@ -305,7 +324,8 @@ and also works when the package is installed beneath `node_modules`.
 
 - `src/tmux.mts` handles bounded tmux operations and local-option discovery.
 - `src/protocol.mts` validates bounded versioned JSON metadata.
-- `src/observer.mts` selects one server, caches inventory and manages scans.
+- `src/observer.mts` selects one server, caches inventory, tracks scan age and
+  expires cached evidence on poll ticks independently of pending scans.
 - `src/reconcile.mts` applies ownership, generation and freshness policy.
 - `src/reporter.mts` observes this Pi's lifecycle; `src/runner.mjs` tracks a command.
 - `src/formatter.mts` is pure presentation; `src/footer.mts` adapts the compositor.

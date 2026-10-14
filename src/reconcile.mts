@@ -7,32 +7,54 @@ export class Reconciler {
     this.sources = new Map();
     this.generations = new Map();
   }
-  fresh(pane, type, r, now) {
-    if (!r) return false;
+  sourceIdentity(type, r) {
+    return type === "job"
+      ? r.jobId
+      : [r.instanceId, r.processInstanceId, r.sessionId, r.jobId].join(":");
+  }
+  observe(pane, type, r, receivedAt) {
+    if (!r) return;
     const key = pane + ":" + type;
-    const identity =
-      type === "job"
-        ? r.jobId
-        : [r.instanceId, r.processInstanceId, r.sessionId, r.jobId].join(":");
+    const identity = this.sourceIdentity(type, r);
     let old = this.sources.get(key);
     if (!old || old.identity !== identity)
-      old = { identity, seq: r.heartbeatSeq, advanced: false, time: now };
+      old = {
+        identity,
+        seq: r.heartbeatSeq,
+        advanced: false,
+        time: receivedAt,
+      };
     else if (r.heartbeatSeq > old.seq) {
       old.seq = r.heartbeatSeq;
-      old.time = now;
+      old.time = receivedAt;
       old.advanced = true;
     } else if (r.heartbeatSeq < old.seq) {
       old.seq = r.heartbeatSeq;
       old.advanced = false;
-      old.time = now;
+      old.time = receivedAt;
     }
     this.sources.set(key, old);
-    return old.advanced && now - old.time < this.staleAfterMs;
+  }
+  fresh(pane, type, r, now) {
+    if (!r) return false;
+    const old = this.sources.get(pane + ":" + type);
+    return (
+      old?.identity === this.sourceIdentity(type, r) &&
+      old.advanced &&
+      now - old.time < this.staleAfterMs
+    );
   }
   disconnect() {
     for (const r of this.sources.values()) r.advanced = false;
   }
   reconcile(panes, now) {
+    for (const p of panes)
+      for (const type of ["job", "pi"])
+        this.observe(p.paneId, type, p[type], p.observedAt?.[type] ?? now);
+    return this.expire(panes, now);
+  }
+  // Cached reevaluation must not observe records again or renew source clocks.
+  expire(panes, now) {
     const present = new Set(panes.map((p) => p.paneId));
     for (const k of this.generations.keys())
       if (!present.has(k)) {

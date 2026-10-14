@@ -31,9 +31,10 @@ export function collectSnapshot(current) {
     identity: current?.identity ?? {},
     config: current?.config ?? null,
     slots: structuredClone(observer?.slots ?? []),
+    inventoryAgeMs: observer?.inventoryAge() ?? null,
     health: observer?.degraded
       ? "degraded"
-      : observer?.identity
+      : observer?.lastSuccessfulScanAt != null
         ? "healthy"
         : observer
           ? "unavailable"
@@ -60,6 +61,12 @@ export function statusText(ctx, data, width = noticeWidth()) {
   else if (data.health !== "healthy")
     lines.push(
       "No verified current inventory is available; this is not an empty healthy inventory.",
+    );
+  if (data.inventoryAgeMs === null)
+    lines.push("Cached inventory — no successful scan yet.");
+  else if (data.inventoryAgeMs >= data.config?.staleAfterMs)
+    lines.push(
+      `Cached inventory — last successful scan ${Math.floor(data.inventoryAgeMs / 1000)}s ago.`,
     );
   if (!count && data.health === "healthy") lines.push("No eligible panes.");
   if (count)
@@ -176,6 +183,7 @@ export function monitorCommand(
       !current?.retired &&
       (!current || ctx.sessionManager.getSessionId() === current.owner);
     if (!live()) return;
+    if (action === "status") current?.observer?.expire();
     const data = collectSnapshot(current);
     let text;
     if (action === "config")

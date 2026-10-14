@@ -42,6 +42,9 @@ function current(config = DEFAULTS) {
     config,
     observer: {
       identity: "server",
+      lastSuccessfulScanAt: 0,
+      inventoryAge: () => 0,
+      expire: () => {},
       slots: STATES.map((state, i) => ({
         paneId: `%${i}`,
         state,
@@ -232,11 +235,17 @@ test("tables escape labels/glyphs and mark missing identity, configuration and i
     1,
   );
   for (const [observer, expected] of [
-    [{ identity: "server", slots: [] }, "No eligible panes."],
+    [
+      { identity: "server", lastSuccessfulScanAt: 0, slots: [] },
+      "No eligible panes.",
+    ],
     [{ slots: [] }, "not an empty healthy inventory"],
     [{ degraded: true, slots: [] }, "Cached inventory"],
   ]) {
-    runtime.observer = observer;
+    runtime.observer = {
+      ...observer,
+      inventoryAge: () => (observer.lastSuccessfulScanAt == null ? null : 0),
+    };
     assert.ok(
       stripTerminalSequences(
         statusText(ctx, collectSnapshot(runtime), 240),

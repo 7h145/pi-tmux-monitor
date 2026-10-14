@@ -4,9 +4,11 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Tmux } from "../src/tmux.mts";
+import { Observer } from "../src/observer.mts";
+import { DEFAULTS } from "../src/config.mts";
 import { JOB, PI } from "../src/protocol.mts";
 import { parseCLI, launch, helperPath, reporterPath } from "../src/launch.mts";
-import { job } from "./fixtures.mjs";
+import { job, reporter } from "./fixtures.mjs";
 async function server(fn) {
   const dir = await mkdtemp(join(tmpdir(), "monitor-tmux-")),
     socket = join(dir, "socket"),
@@ -483,3 +485,90 @@ test("observer does not exclude a reused own-pane ID on a replacement server", a
       observer.stop();
     }
   }));
+
+test("disposable server: cached expiry and delayed completion preserve record receive times", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  await server(async ({ tmux }) => {
+    let time = 0,
+      waiting = false,
+      release,
+      entered,
+      calls = 0;
+    const pause = new Promise((resolve) => {
+      release = resolve;
+    });
+    const receiving = new Promise((resolve) => {
+      entered = resolve;
+    });
+    const inventory = tmux.inventory.bind(tmux),
+      call = tmux.call.bind(tmux);
+    tmux.call = (...args) => {
+      calls++;
+      return call(...args);
+    };
+    tmux.inventory = async (...args) => {
+      const rows = await inventory(...args);
+      if (waiting) {
+        entered();
+        await pause;
+      }
+      return rows;
+    };
+    const j = job({ paneId: "%0" }),
+      r = reporter({
+        paneId: "%0",
+        jobId: "j",
+        kind: "batch",
+        state: "active",
+      });
+    const seen = [];
+    const observer = new Observer({
+      cwd: "/work",
+      owner: "owner",
+      env: {},
+      config: { ...DEFAULTS, socketPath: tmux.socket, scope: "server" },
+      clock: () => time,
+      tmuxFactory: () => tmux,
+      publish: (slots) => seen.push(slots),
+    });
+    let scanning;
+    try {
+      await tmux.write("job", "%0", j);
+      await tmux.write("pi", "%0", r);
+      await observer.start();
+      time = 5000;
+      j.heartbeatSeq++;
+      r.heartbeatSeq++;
+      await tmux.write("job", "%0", j);
+      await tmux.write("pi", "%0", r);
+      await observer.scan();
+      assert.equal(observer.slots[0].state, "active");
+      time = 7000;
+      j.heartbeatSeq++;
+      r.heartbeatSeq++;
+      await tmux.write("job", "%0", j);
+      await tmux.write("pi", "%0", r);
+      waiting = true;
+      scanning = observer.scan();
+      await receiving;
+      const queries = calls,
+        publications = seen.length;
+      time = 20000;
+      t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+      assert.equal(observer.slots[0].state, "unknown");
+      assert.equal(seen.length, publications + 1);
+      assert.equal(calls, queries);
+      assert.equal(observer.lastSuccessfulScanAt, 5000);
+      time = 22000;
+      release();
+      await scanning;
+      assert.equal(observer.slots[0].state, "unknown");
+      assert.deepEqual(observer.cache[0].observedAt, { job: 7000, pi: 7000 });
+      assert.equal(observer.lastSuccessfulScanAt, 22000);
+    } finally {
+      observer.stop();
+      release();
+      await scanning;
+    }
+  });
+});

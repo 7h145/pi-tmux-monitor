@@ -9,6 +9,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { FooterAdapter, STATUS_KEY } from "../src/footer.mts";
+import { Observer } from "../src/observer.mts";
+import { job, reporter } from "./fixtures.mjs";
 import { compositorSource } from "./compositor-source.mjs";
 import { DEFAULTS } from "../src/config.mts";
 import { format, fullSummary } from "../src/formatter.mts";
@@ -454,3 +456,102 @@ test("shutdown cancels an absence check without touching a retired context", (t)
   assert.deepEqual(h.diagnostics, []);
   assert.equal(h.statuses.size, 0);
 });
+
+for (const dynamic of [false, true])
+  test(
+    `${dynamic ? "actual compositor" : "static fallback"}: pending-scan expiry republishes and updates the rendered footer`,
+    { skip: dynamic && !compositor },
+    async (t) => {
+      t.mock.timers.enable({ apis: ["setInterval"] });
+      const h = harness();
+      const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (s) =>
+        h.diagnostics.push(s),
+      );
+      let time = 0,
+        waiting = false,
+        release,
+        entered,
+        calls = 0;
+      const pause = new Promise((resolve) => {
+        release = resolve;
+      });
+      const receiving = new Promise((resolve) => {
+        entered = resolve;
+      });
+      const p = {
+        paneId: "%1",
+        pid: "10",
+        sessions: [],
+        job: job(),
+        pi: reporter({ jobId: "j", kind: "batch", state: "active" }),
+      };
+      const observer = new Observer({
+        cwd: "/work",
+        owner: "owner",
+        env: {},
+        config: { ...DEFAULTS, socketPath: "/socket" },
+        clock: () => time,
+        publish: (slots) => adapter.publish(slots),
+        tmuxFactory: () => ({
+          identity: async () => {
+            calls++;
+            return "server";
+          },
+          inventory: async (_diagnostic, clock) => {
+            calls++;
+            const rows = [
+              {
+                ...structuredClone(p),
+                observedAt: { job: clock(), pi: clock() },
+              },
+            ];
+            if (waiting) {
+              entered();
+              await pause;
+            }
+            return rows;
+          },
+        }),
+      });
+      let scanning;
+      try {
+        if (dynamic) h.start();
+        await observer.start();
+        time = 5000;
+        p.job.heartbeatSeq++;
+        p.pi.heartbeatSeq++;
+        await observer.scan();
+        const component = footer(h.statuses);
+        const line = () =>
+          stripTerminalSequences(component.render(140)[dynamic ? 0 : 2]);
+        assert.ok(line().endsWith("A"));
+        waiting = true;
+        scanning = observer.scan();
+        await receiving;
+        const publications = h.publications,
+          queries = calls;
+        time = 20000;
+        t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+        assert.equal(h.publications, publications + 1);
+        assert.equal(calls, queries);
+        assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "?");
+        assert.ok(line().endsWith("?"));
+        assert.equal(observer.lastSuccessfulScanAt, 5000);
+        const count = h.publications;
+        observer.stop();
+        adapter.stop();
+        h.invalidate();
+        release();
+        await scanning;
+        assert.equal(h.publications, count + 1); // Only the explicit adapter cleanup.
+        assert.equal(observer.lastSuccessfulScanAt, 5000);
+        assert.deepEqual(h.diagnostics, []);
+      } finally {
+        observer.stop();
+        adapter.stop();
+        release();
+        await scanning;
+        if (dynamic) h.stop();
+      }
+    },
+  );

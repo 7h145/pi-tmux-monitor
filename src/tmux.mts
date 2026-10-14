@@ -2,6 +2,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { realpath, stat } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { JOB, PI, OWNER, parseRecord } from "./protocol.mts";
 const exec = promisify(execFile);
 export class Tmux {
@@ -113,7 +114,10 @@ export class Tmux {
       `set-option -p -u -t ${target} ${option}`,
     );
   }
-  async inventory(diagnostic = (_message) => {}) {
+  async inventory(
+    diagnostic = (_message) => {},
+    clock = () => performance.now(),
+  ) {
     const rows = await this.call(
       "list-panes",
       "-a",
@@ -153,8 +157,11 @@ export class Tmux {
     // Sequential, bounded operations; no per-pane process flood or overlapping scan.
     for (const pane of panes.values()) {
       pane.sessions = pane.sessionIds.map((s) => sessions.get(s));
+      pane.observedAt = {};
       pane.job = await this.record("job", pane.paneId, diagnostic);
+      pane.observedAt.job = clock();
       pane.pi = await this.record("pi", pane.paneId, diagnostic);
+      pane.observedAt.pi = clock();
     }
     return [...panes.values()].sort(
       (a, b) => Number(a.paneId.slice(1)) - Number(b.paneId.slice(1)),
