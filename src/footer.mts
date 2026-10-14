@@ -36,6 +36,7 @@ export class FooterAdapter {
         this.unregister = remove;
         this.instanceId = payload.instanceId;
         this.capability = "dynamic-v1";
+        this.cancelMissingCheck();
       } catch {
         this.failedRegistration();
       }
@@ -56,11 +57,38 @@ export class FooterAdapter {
         this.capability = "missing";
         this.publish(this.slots);
         this.discover();
-        if (!this.instanceId) this.missing();
+        this.deferMissing();
       }),
     ];
     this.discover();
-    if (!this.instanceId) this.missing();
+  }
+  finishStartup() {
+    if (this.retired || this.startupFinished) return;
+    this.startupFinished = true;
+    this.deferMissing();
+  }
+  cancelMissingCheck() {
+    clearTimeout(this.missingTimer);
+    this.missingTimer = undefined;
+  }
+  deferMissing() {
+    if (
+      this.retired ||
+      !this.startupFinished ||
+      this.instanceId ||
+      this.warned ||
+      this.missingTimer !== undefined
+    )
+      return;
+    // The initial tmux scan can yield before later session_start handlers run.
+    // Wait until it finishes, then allow one poll interval for discovery.
+    this.missingTimer = setTimeout(() => {
+      this.missingTimer = undefined;
+      if (this.retired || this.instanceId) return;
+      this.discover();
+      if (!this.retired && !this.instanceId) this.missing();
+    }, this.config.pollIntervalMs);
+    this.missingTimer.unref?.();
   }
   failedRegistration() {
     if (this.registrationWarned) return;
@@ -95,6 +123,7 @@ export class FooterAdapter {
   stop() {
     if (this.retired) return;
     this.retired = true;
+    this.cancelMissingCheck();
     for (const unsubscribe of this.subscriptions) unsubscribe();
     this.subscriptions = [];
     this.unregister?.();

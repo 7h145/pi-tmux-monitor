@@ -118,7 +118,8 @@ function footer(statuses) {
     getExtensionStatuses: () => statuses,
   });
 }
-test("missing/unsupported capability retains full static summary; late discovery is retired", () => {
+test("missing/unsupported capability retains full static summary; late discovery is retired", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness(),
     adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (s) =>
       h.diagnostics.push(s),
@@ -126,6 +127,12 @@ test("missing/unsupported capability retains full static summary; late discovery
   adapter.publish(Array.from({ length: 20 }, () => ({ state: "active" })));
   assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "A20");
   assert.equal(adapter.capability, "missing");
+  assert.equal(h.diagnostics.length, 0);
+  adapter.finishStartup();
+  t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+  assert.equal(h.diagnostics.length, 1);
+  adapter.finishStartup();
+  t.mock.timers.tick(DEFAULTS.pollIntervalMs);
   assert.equal(h.diagnostics.length, 1);
   let request;
   h.pi.events.on(prefix + "discover", (r) => (request = r));
@@ -148,6 +155,8 @@ test("missing/unsupported capability retains full static summary; late discovery
     },
   });
   adapter.publish([]);
+  t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+  assert.equal(h.diagnostics.length, 1);
   assert.equal(h.statuses.size, 0);
 });
 test("synthetic capability replacement, stale unavailability and idempotent cleanup", () => {
@@ -190,7 +199,8 @@ test("synthetic capability replacement, stale unavailability and idempotent clea
 test(
   "actual compositor: right placement, both themes/start orders, mixed dynamic/static producers, resize and cleanup",
   { skip: !compositor },
-  () => {
+  (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     assert.equal(STATUS_KEY, "footer-compositor:right:0:tmux-monitor");
     const original = FooterComponent.prototype.render;
     for (const config of configs)
@@ -200,9 +210,14 @@ test(
         const disposers = [];
         try {
           if (!producerFirst) h.start();
-          adapter = new FooterAdapter(h.pi, h.ctx, config, () => {});
+          adapter = new FooterAdapter(h.pi, h.ctx, config, (message) =>
+            h.diagnostics.push(message),
+          );
+          adapter.finishStartup();
           if (producerFirst) h.start();
+          t.mock.timers.tick(config.pollIntervalMs);
           assert.equal(adapter.capability, "dynamic-v1");
+          assert.deepEqual(h.diagnostics, []);
           const slots = [
             ...Array.from({ length: 30 }, () => ({ state: "active" })),
             ...Array.from({ length: 10 }, () => ({ state: "idle" })),
@@ -298,7 +313,9 @@ test(
           );
           h.start();
           registerPeers();
+          t.mock.timers.tick(config.pollIntervalMs);
           assert.equal(adapter.capability, "dynamic-v1");
+          assert.deepEqual(h.diagnostics, []);
           const restarted = stripTerminalSequences(component.render(140)[0]);
           assert.ok(restarted.includes(strip), restarted);
           adapter.stop();
@@ -350,3 +367,93 @@ test(
     }
   },
 );
+
+function syntheticCapability(instanceId = "synthetic") {
+  return { version: 1, instanceId, register: () => () => {} };
+}
+
+test("absence grace begins after initialization; a late capability cancels it", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness();
+  const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (message) =>
+    h.diagnostics.push(message),
+  );
+  try {
+    adapter.publish([{ state: "idle" }]);
+    assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "_");
+    // Initial observation may wait on tmux before the compositor starts.
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs * 10);
+    assert.deepEqual(h.diagnostics, []);
+    adapter.finishStartup();
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs - 1);
+    assert.deepEqual(h.diagnostics, []);
+    h.pi.events.emit(prefix + "available", syntheticCapability());
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs * 2);
+    assert.equal(adapter.capability, "dynamic-v1");
+    assert.deepEqual(h.diagnostics, []);
+  } finally {
+    adapter.stop();
+  }
+});
+
+test("deferred absence check rediscovers a capability without an availability event", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness();
+  const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (message) =>
+    h.diagnostics.push(message),
+  );
+  const unsubscribe = h.pi.events.on(prefix + "discover", (request) =>
+    request.accept(syntheticCapability()),
+  );
+  try {
+    adapter.finishStartup();
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+    assert.equal(adapter.capability, "dynamic-v1");
+    assert.deepEqual(h.diagnostics, []);
+  } finally {
+    adapter.stop();
+    unsubscribe();
+  }
+});
+
+test("persistent capability loss warns once and keeps the same static fallback", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness();
+  const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (message) =>
+    h.diagnostics.push(message),
+  );
+  try {
+    h.pi.events.emit(prefix + "available", syntheticCapability("a"));
+    adapter.finishStartup();
+    adapter.publish([{ state: "running" }]);
+    h.pi.events.emit(prefix + "unavailable", { version: 1, instanceId: "a" });
+    assert.equal(adapter.capability, "missing");
+    assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "R");
+    assert.deepEqual(h.diagnostics, []);
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs);
+    assert.equal(h.diagnostics.length, 1);
+    h.pi.events.emit(prefix + "available", syntheticCapability("b"));
+    h.pi.events.emit(prefix + "unavailable", { version: 1, instanceId: "b" });
+    t.mock.timers.tick(DEFAULTS.pollIntervalMs * 2);
+    assert.equal(h.diagnostics.length, 1);
+  } finally {
+    adapter.stop();
+  }
+});
+
+test("shutdown cancels an absence check without touching a retired context", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness();
+  const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (message) =>
+    h.diagnostics.push(message),
+  );
+  adapter.finishStartup();
+  adapter.publish([{ state: "failed" }]);
+  adapter.stop();
+  adapter.stop();
+  h.invalidate();
+  adapter.finishStartup();
+  t.mock.timers.tick(DEFAULTS.pollIntervalMs * 2);
+  assert.deepEqual(h.diagnostics, []);
+  assert.equal(h.statuses.size, 0);
+});

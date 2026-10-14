@@ -42,6 +42,12 @@ can apply. This fallback **is not width-aware**. `/tmux-monitor` reports
 An unsupported/custom Pi footer can retain fallback placement even when the
 capability is present. The compositor is the only footer owner.
 
+Static fallback publication does not wait for discovery. After the initial tmux
+scan finishes, the monitor allows one poll interval for a capability to appear
+before warning once about its absence. Successful registration cancels a pending
+warning, as does shutdown or reload. Persistent capability loss uses the same
+grace period and fallback.
+
 ## Read the indicator
 
 | State | Default | Meaning |

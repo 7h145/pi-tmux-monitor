@@ -32,12 +32,14 @@ async function until(fn) {
   }
   throw Error("Timed out");
 }
-for (const [mode, activeTheme] of [
-  ["regular", "default"],
-  ["fullscreen", "gaudy"],
+for (const [mode, activeTheme, producerFirst] of [
+  ["regular", "default", true],
+  ["regular", "default", false],
+  ["fullscreen", "gaudy", true],
+  ["fullscreen", "gaudy", false],
 ])
   test(
-    `live Pi ${mode}/${activeTheme}: real compositor, source edits across reload, right placement, theme, resize, cleanup (no model requests)`,
+    `live Pi ${mode}/${activeTheme}/${producerFirst ? "monitor-first" : "compositor-first"}: real compositor, quiet startup/reload, source edits, right placement, resize, cleanup (no model requests)`,
     { skip: !available },
     async () => {
       const dir = await mkdtemp("/tmp/monitor-live-tui-"),
@@ -166,10 +168,9 @@ for (const [mode, activeTheme] of [
           "--no-session",
           "--tui-mode",
           mode,
-          "-e",
-          entry,
-          "-e",
-          source,
+          ...(producerFirst
+            ? ["-e", entry, "-e", source]
+            : ["-e", source, "-e", entry]),
           "-e",
           synth,
         ]);
@@ -198,6 +199,7 @@ for (const [mode, activeTheme] of [
         const block = `${unregistered}${outcome} • clean • C W2% • dyn`;
         await tmux.call("send-keys", "-t", pane, "/tmux-monitor", "Enter");
         await until(async () => (await snapshot()).includes(warmKey));
+        assert.ok(!(await snapshot()).includes("Width-aware compositor"));
         await writeFile(entry, currentEntry);
         await tmux.call("send-keys", "-t", pane, "/reload", "Enter");
         const updated = await until(async () => {
@@ -231,6 +233,8 @@ for (const [mode, activeTheme] of [
           return output.includes("dynamic-v1") && output.includes(STATUS_KEY);
         });
         let output = await snapshot();
+        assert.ok(!output.includes("Width-aware compositor"), output);
+        assert.match(output, /"diagnostics":\s*\[\]/);
         assert.ok(output.includes("(ro)"));
         assert.ok(output.includes("C W2%"));
         assert.ok(output.includes("ordinary"));
@@ -311,6 +315,9 @@ for (const [mode, activeTheme] of [
         await until(async () =>
           (await snapshot()).replace(/\s+/g, "").includes(changedKey),
         );
+        output = await snapshot();
+        assert.ok(!output.includes("Width-aware compositor"), output);
+        assert.match(output, /"diagnostics":\s*\[\]/);
         await tmux.call("send-keys", "-t", pane, "/quit", "Enter");
         const final = await until(async () => {
           const r = await tmux.record("job", pane);

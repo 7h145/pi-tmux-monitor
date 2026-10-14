@@ -208,3 +208,94 @@ test("synthetic Pi events use actual pane metadata; reload retains failure, quit
     await emit("session_shutdown", { reason: "quit" });
     assert.equal(await tmux.record("pi", "%0"), null);
   }));
+
+test("persistent absence warns once after startup, keeps fallback, and stops cleanly", async () =>
+  scenario(async ({ emit, commands, ctx, notices, statuses, tmux }) => {
+    const warning =
+      "Width-aware compositor capability unavailable; using static summary";
+    await launch(
+      parseCLI([
+        "launch",
+        "--socket",
+        tmux.socket,
+        "--session",
+        "self",
+        "--window",
+        "completed",
+        "--owner",
+        "original",
+        "--",
+        "true",
+      ]),
+    );
+    await emit("session_start");
+    assert.equal(notices.filter((message) => message === warning).length, 0);
+    for (
+      let i = 0;
+      i < 100 &&
+      (!notices.includes(warning) || statuses.get(STATUS_KEY) !== "+");
+      i++
+    )
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(notices.filter((message) => message === warning).length, 1);
+    assert.equal(statuses.get(STATUS_KEY), "+");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await commands.get("tmux-monitor").handler("", ctx);
+    const info = JSON.parse(notices.at(-1));
+    assert.equal(info.capability, "missing");
+    assert.equal(
+      info.diagnostics.filter((message) => message === warning).length,
+      1,
+    );
+    await emit("session_shutdown", { reason: "reload" });
+    await emit("session_start");
+    // Retire a new runtime before its absence grace expires.
+    await emit("session_shutdown", { reason: "quit" });
+    const count = notices.length;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(notices.length, count);
+    assert.equal(statuses.size, 0);
+  }));
+
+test("slow initial observation stays quiet until later startup capability discovery", async () =>
+  scenario(async ({ emit, pi, tmux, notices }) => {
+    const inventory = Tmux.prototype.inventory;
+    let release, entered;
+    const pause = new Promise((resolve) => {
+      release = resolve;
+    });
+    const observing = new Promise((resolve) => {
+      entered = resolve;
+    });
+    Tmux.prototype.inventory = async function (...args) {
+      if (this.socket === tmux.socket) {
+        entered();
+        await pause;
+      }
+      return inventory.apply(this, args);
+    };
+    const starting = emit("session_start");
+    try {
+      await observing;
+      // Two poll intervals pass while the monitor's session_start is awaiting tmux.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.ok(
+        !notices.some((message) => message.includes("Width-aware compositor")),
+      );
+      release();
+      await starting;
+      pi.events.emit("footer-compositor:dynamic:available", {
+        version: 1,
+        instanceId: "later-startup-handler",
+        register: () => () => {},
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.ok(
+        !notices.some((message) => message.includes("Width-aware compositor")),
+      );
+    } finally {
+      release();
+      Tmux.prototype.inventory = inventory;
+      await starting;
+    }
+  }));

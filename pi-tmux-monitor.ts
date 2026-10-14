@@ -102,6 +102,7 @@ export default function monitor(pi: ExtensionAPI) {
         publish: (slots: any[]) => current.footer.publish(slots),
       });
       await current.observer.start();
+      current.footer.finishStartup();
     }
   });
   pi.on("session_shutdown", (event) => stop(event.reason));
