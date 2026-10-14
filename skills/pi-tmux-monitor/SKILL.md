@@ -50,8 +50,9 @@ node "$HELPER" launch \
   --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- npm test
 ```
 
-Use `--kind service` for dev servers/watchers. Generic interactive applications
-without a reporter remain unknown; do not describe process presence as idle/active.
+Use `--kind service` for dev servers/watchers. Without an application reporter,
+fresh runner liveness yields running for any kind, not idle or active. Pane
+presence alone is not liveness evidence.
 Arguments after `--` are literal command argv. For shell syntax, use an explicit
 shell, for example `-- bash -lc 'npm test && npm run build'`; do not flatten arbitrary
 argv into unquoted shell text.
@@ -87,10 +88,15 @@ result. A retained shell/window preserves output and status; interrupts/failures
 become command outcomes. If launch confirmation fails, inspect before retrying:
 work may already be running. Never automatically duplicate a failed launch.
 
-`_` idle, `R` active/batch, `S` service, `+` command success, `!` failure, `?` unknown,
-`:` eligible unregistered pane. Live discovery is initially unknown until a
-heartbeat advances. Stale/missing instrumentation reduces certainty. Settled
-interactive Pi is idle, not completed task work.
+`_` idle, `A` active, `R` running, `+` command success, `!` failure, `?` unknown,
+`:` eligible unregistered pane. Kinds describe intent, not activity. Fresh Pi
+reporting supplies idle/active/final-error state for any kind; even a batch Pi is
+idle after settlement and before command exit. Fresh runner liveness alone means
+running. A known command exit takes precedence. Each live source needs heartbeat
+advancement before it is trusted. Stale or missing application reporting falls
+back to running only with fresh runner evidence; otherwise registered work is
+unknown. Loss of previously confirmed reporting appears in diagnostics. Idle is
+not task completion, and unregistered panes do not become running from existence.
 
 The monitor appears in the compositor's right-hand group, before higher-order statuses when space permits;
 those statuses can reduce or omit it on narrow terminals. Without an active

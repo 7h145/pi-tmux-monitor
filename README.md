@@ -47,23 +47,33 @@ capability is present. The compositor is the only footer owner.
 | State | Default | Meaning |
 |---|---|---|
 | idle | `_` | Fresh Pi reporter; run settled |
-| active | `R` | Fresh active Pi, or live batch command |
-| service | `S` | Live service command; not a claim of activity |
+| active | `A` | Fresh Pi reporter says the workload is doing work |
+| running | `R` | Fresh runner confirms liveness; internal activity is unknown |
 | success | `+` | Command exited zero |
-| failed | `!` | Command failed, or interactive Pi settled with an error |
+| failed | `!` | Command failed, or Pi settled with a final error |
 | unknown | `?` | Registered work without trustworthy live state |
 | unregistered | `:` | Eligible pane without a recognized registration |
 
-A successfully settled interactive Pi is idle, not a completed task. A batch
-remains active until its wrapper exits, even if Pi has settled. Recoverable
-errors/retries do not immediately turn into failure. An interactive final error
-persists through heartbeats until the next run, but becomes unknown if reporting
-stops. Manual compaction is active while running.
+Workload kinds (`batch`, `service`, `interactive`) describe launch intent, not
+activity. Fresh Pi reporting supplies idle, active or final-error state for any
+kind. A successfully settled Pi is idle while it remains alive, including a batch
+before wrapper exit; it is not proof of task completion. Without trustworthy
+application state, fresh runner liveness yields running for any kind. Pane
+presence alone proves none of these states. Manual compaction is active while
+running.
 
-Live records start **unknown** until their sequence advances. With defaults,
-confirmation can take one 5-second heartbeat plus a 2-second scan. Live state
-becomes unknown after 15 seconds without advancement. Command outcomes do not
-expire while the pane remains and no reuse is known. On disconnection, eligible
+Recoverable errors/retries do not immediately mean failure. A final Pi error
+persists through heartbeats until the next run. If application reporting goes
+stale or disappears, discard its state: a fresh runner can still establish
+running; otherwise registered work becomes unknown. Loss of previously confirmed
+application reporting appears in diagnostics. A known command exit takes
+precedence over application state.
+
+Each live source starts unconfirmed until its sequence advances, independently
+of other sources. Without other trustworthy evidence, display **unknown**. With
+defaults, confirmation can take one 5-second heartbeat plus a 2-second scan.
+Sources become stale after 15 seconds without advancement. Command outcomes do
+not expire while the pane remains and no reuse is known. On disconnection, eligible
 cached slots remain: live states are unknown, known outcomes remain, and
 `/tmux-monitor` reports degraded observation. Cached slots do not prove that panes
 still exist. A replacement server starts a new inventory namespace.
@@ -91,9 +101,9 @@ node "$HELPER" launch \
   --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- npm test
 ```
 
-`launch` supports `batch`, `service` and `interactive` commands. Generic interactive
-commands without an application reporter show unknown, not idle. A new session
-gets ownership context; an existing shared session is never stamped or reassigned.
+`launch` supports `batch`, `service` and `interactive` commands. Without an
+application reporter, fresh runner evidence yields running, not idle or active.
+A new session gets ownership context; an existing shared session is never stamped or reassigned.
 The helper creates a new window, never kills an existing one, and keeps an
 inspectable Bash shell after the command exits. Window and session names use
 letters, digits, `.`, `_`, `-` (up to 128 characters). Labels are explicit, optional,
@@ -277,8 +287,8 @@ and `partialOrder` (each lists all seven states exactly once).
 
 The strip exactly fitting its budget is retained. Otherwise count the **whole**
 set, omit zeros and omit `1` for singleton counts, combining singleton runs:
-`R3 _5 S+?`. If that cannot fit, retain the longest attention-first prefix of
-complete count tokens with one reserved omission column, e.g. `!2 R20…`. Stop at
+`A3 _5 R+?`. If that cannot fit, retain the longest attention-first prefix of
+complete count tokens with one reserved omission column, e.g. `!2 A20…`. Stop at
 the first token that cannot fit; never split a number or skip to lower-priority
 categories. At one column the partial display is `…`; empty/zero-budget is hidden.
 All-idle sets and retained outcomes are not hidden just for being quiet.
@@ -312,7 +322,7 @@ Arbitrary shell/builtin reuse is not fully observable without cooperation. Manag
 launches clear prior-generation metadata; confirmed new self-reporting Pi and
 observable pane-process replacement invalidate old outcomes. Do not treat a
 retained result as proof that every later uninstrumented shell action was tracked.
-Very short live records may disappear before heartbeat confirmation. A service
+Very short live records may disappear before heartbeat confirmation. A running
 indicator is not a health check. Observer failures never stop workloads.
 
 No automatic model calls, conversation inspection, credentials collection or

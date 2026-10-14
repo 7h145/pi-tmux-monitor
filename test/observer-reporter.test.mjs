@@ -169,7 +169,7 @@ test("observer no overlap, first uncertainty, degraded inventory, removal and se
   p.job.heartbeatSeq++;
   time = 5000;
   await o.scan();
-  assert.equal(o.slots[0].state, "active");
+  assert.equal(o.slots[0].state, "running");
   fail = true;
   await o.scan();
   assert.equal(o.slots[0].state, "unknown");
@@ -265,4 +265,57 @@ test("reporter stops reporting to a replaced server without touching newer metad
   await r.stop("quit");
   assert.equal(tmux.records.get("pi").instanceId, "new-server-runtime");
   assert.equal(r.retired, true);
+});
+
+test("observer exposes application reporter loss without inferring activity or failure", async () => {
+  let time = 0;
+  const diagnostics = [];
+  const p = {
+    paneId: "%1",
+    pid: "10",
+    sessions: [],
+    job: job({ kind: "interactive", runtime: "pi" }),
+    pi: reporter({ jobId: "j" }),
+  };
+  const o = new Observer({
+    cwd: "/work",
+    owner: "owner",
+    config: { ...DEFAULTS, socketPath: "/explicit" },
+    publish: () => {},
+    diagnostic: (message) => diagnostics.push(message),
+    clock: () => time,
+    tmuxFactory: () => ({
+      identity: async () => "server",
+      inventory: async () => [structuredClone(p)],
+    }),
+  });
+  try {
+    await o.scan();
+    p.job.heartbeatSeq++;
+    p.pi.heartbeatSeq++;
+    time = 5000;
+    await o.scan();
+    assert.equal(o.slots[0].state, "idle");
+    p.pi = null;
+    time = 5100;
+    await o.scan();
+    assert.equal(o.slots[0].state, "running");
+    assert.equal(diagnostics.length, 1);
+    assert.match(
+      diagnostics[0],
+      /No fresh application state for pane %1/,
+    );
+    await o.scan();
+    assert.equal(diagnostics.length, 1);
+    time = 20000;
+    await o.scan();
+    assert.equal(o.slots[0].state, "unknown");
+    p.job.phase = "success";
+    p.job.exitCode = 0;
+    await o.scan();
+    assert.equal(o.slots[0].state, "success");
+    assert.equal(diagnostics.length, 1);
+  } finally {
+    o.stop();
+  }
 });

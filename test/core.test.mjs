@@ -30,9 +30,13 @@ test("formatter thresholds, singleton groups and priority", () => {
   assert.equal(format([], DEFAULTS, theme, 80).mode, "hidden");
   assert.equal(format(slots(2), DEFAULTS, theme, 0).mode, "hidden");
   assert.equal(plain(format(slots(2), DEFAULTS, theme, 2)), "__");
+  const fixture = ["unregistered", "idle", "idle", "running"].map((state) => ({
+    state,
+  }));
+  assert.equal(plain(format(fixture, DEFAULTS, theme, 4)), ":__R");
   assert.equal(
     plain(fullSummary(slots(5, 3, 1, 1, 0, 1), DEFAULTS, theme)),
-    "R3 _5 S+?",
+    "A3 _5 R+?",
   );
   assert.equal(
     format(slots(5, 3, 1, 1, 0, 1), DEFAULTS, theme, 9).mode,
@@ -44,7 +48,7 @@ test("formatter thresholds, singleton groups and priority", () => {
   );
   assert.equal(
     plain(format(slots(100, 20, 0, 0, 2, 1), DEFAULTS, theme, 8)),
-    "!2 R20…",
+    "!2 A20…",
   );
   assert.equal(plain(format(slots(10000, 1000), DEFAULTS, theme, 1)), "…");
   assert.equal(plain(format(slots(10000, 1000), DEFAULTS, theme, 3)), "…");
@@ -80,6 +84,10 @@ test("both themes fit every budget and preserve full-set counts", () => {
           JSON.stringify({ result, width }),
         );
       }
+  assert.equal(
+    plain(format(slots(1, 1, 1, 1, 1, 1, 1), DEFAULTS, theme, 7)),
+    "_AR+!?:",
+  );
   assert.equal(
     plain(format(slots(1, 1, 1, 1, 1, 1, 1), gaudy, theme, 7)),
     "·●◇✓!?○",
@@ -118,7 +126,7 @@ test("configuration layers, trust, malformed files, selection, inheritance", asy
     assert.equal(config.scope, "children");
     assert.equal(config.activeTheme, "custom");
     assert.equal(config.themes.custom.states.active.glyph, "A");
-    assert.equal(config.themes.custom.states.service.glyph, "S");
+    assert.equal(config.themes.custom.states.running.glyph, "R");
     assert.equal(config.themes.custom.states.idle.fg, "text");
     const diagnostics = [];
     await writeFile(join(project, ".pi/pi-tmux-monitor.json"), "{broken");
@@ -192,7 +200,7 @@ test("freshness and independent lifetime precedence", () => {
   const state = (time) => r.reconcile([p], time)[0].state;
   assert.equal(state(0), "unknown");
   j.heartbeatSeq++;
-  assert.equal(state(5000), "active");
+  assert.equal(state(5000), "running");
   assert.equal(state(20000), "unknown");
   j.phase = "success";
   j.exitCode = 0;
@@ -205,12 +213,12 @@ test("freshness and independent lifetime precedence", () => {
   j.kind = "service";
   assert.equal(state(35000), "unknown");
   j.heartbeatSeq++;
-  assert.equal(state(40000), "service");
+  assert.equal(state(40000), "running");
   j.kind = "interactive";
-  assert.equal(state(40001), "unknown");
+  assert.equal(state(40001), "running");
   j.runtime = "pi";
   p.pi = reporter({ jobId: "new", state: "idle" });
-  assert.equal(state(40002), "unknown");
+  assert.equal(state(40002), "running");
   p.pi.heartbeatSeq++;
   assert.equal(state(45000), "idle");
   p.pi.state = "failed";
@@ -221,7 +229,7 @@ test("freshness and independent lifetime precedence", () => {
   p.pi.kind = "batch";
   p.pi.state = "idle";
   p.pi.heartbeatSeq++;
-  assert.equal(state(60002), "active");
+  assert.equal(state(60002), "idle");
   j.phase = "failed";
   j.exitCode = 2;
   assert.equal(state(60003), "failed");
@@ -348,4 +356,170 @@ test("helper explicit owner/ancestry, flags, quoting and defaults", () => {
       "/work",
     ),
   );
+});
+
+test("display states and glyphs are distinct from workload kinds", () => {
+  assert.deepEqual(STATES, [
+    "idle",
+    "active",
+    "running",
+    "success",
+    "failed",
+    "unknown",
+    "unregistered",
+  ]);
+  assert.deepEqual(DEFAULTS.themes.default.states.active, {
+    glyph: "A",
+    fg: "accent",
+  });
+  assert.deepEqual(DEFAULTS.themes.default.states.running, {
+    glyph: "R",
+    fg: "muted",
+  });
+  assert.ok(parseRecord(JSON.stringify(job({ kind: "service" })), "job", "%1"));
+  assert.equal(
+    parseRecord(JSON.stringify(job({ kind: "running" })), "job", "%1"),
+    null,
+  );
+  assert.equal(
+    parseRecord(JSON.stringify(reporter({ state: "running" })), "pi", "%1"),
+    null,
+  );
+  assert.throws(() =>
+    applyLayer(
+      DEFAULTS,
+      { themes: { default: { states: { service: { glyph: "S" } } } } },
+      "/config.json",
+    ),
+  );
+  assert.throws(() =>
+    applyLayer(
+      DEFAULTS,
+      {
+        summaryOrder: DEFAULTS.summaryOrder.map((s) =>
+          s === "running" ? "service" : s,
+        ),
+      },
+      "/config.json",
+    ),
+  );
+});
+
+for (const kind of ["batch", "service", "interactive"]) {
+  test(`${kind}: fresh application state, independent liveness, reporter loss and retained outcomes`, () => {
+    const diagnostics = [];
+    const reconciler = new Reconciler(15, (message) =>
+      diagnostics.push(message),
+    );
+    const j = job({ kind, runtime: "pi" });
+    const p = pane(j, reporter({ kind, jobId: j.jobId }));
+    const state = (time) => reconciler.reconcile([p], time)[0].state;
+    assert.equal(state(0), "unknown");
+    j.heartbeatSeq++;
+    assert.equal(state(1), "running"); // New application evidence cannot displace fresh liveness.
+    assert.equal(diagnostics.length, 0);
+    p.pi.heartbeatSeq++;
+    assert.equal(state(2), "idle");
+    for (const [time, activity] of [
+      [3, "active"],
+      [4, "failed"],
+      [5, "idle"],
+    ]) {
+      p.pi.state = activity;
+      p.pi.heartbeatSeq++;
+      assert.equal(state(time), activity);
+    }
+    // A settled batch/service Pi stays idle before wrapper exit, even with a stale runner.
+    p.pi.heartbeatSeq++;
+    assert.equal(state(16), "idle");
+    j.heartbeatSeq++;
+    assert.equal(state(30), "idle");
+    assert.equal(state(31), "running"); // Application state is stale; runner remains fresh.
+    assert.match(
+      diagnostics[0],
+      /No fresh application state for pane %1/,
+    );
+    assert.equal(state(32), "running");
+    assert.equal(diagnostics.length, 1);
+    p.pi = null;
+    assert.equal(state(33), "running");
+    assert.equal(state(45), "unknown");
+    j.heartbeatSeq++;
+    assert.equal(state(46), "running");
+    p.pi = reporter({ kind, jobId: j.jobId, instanceId: "replacement" });
+    assert.equal(state(47), "running");
+    p.pi.heartbeatSeq++;
+    assert.equal(state(48), "idle");
+    p.pi.state = "failed";
+    p.pi.heartbeatSeq++;
+    assert.equal(state(49), "failed");
+    j.heartbeatSeq++;
+    assert.equal(state(63), "failed");
+    assert.equal(state(64), "running"); // A stale application failure is not a command outcome.
+    assert.equal(diagnostics.length, 2);
+    j.phase = "success";
+    j.exitCode = 0;
+    assert.equal(state(65), "success");
+    reconciler.disconnect();
+    assert.equal(state(1000), "success");
+    j.phase = "failed";
+    j.exitCode = 2;
+    assert.equal(state(1001), "failed");
+    assert.equal(diagnostics.length, 2);
+  });
+
+  test(`${kind}: generic commands need running-phase evidence; standalone Pi state ignores kind`, () => {
+    const r = new Reconciler(15);
+    const p = pane(job({ kind }));
+    assert.equal(r.reconcile([p], 0)[0].state, "unknown");
+    p.job.heartbeatSeq++;
+    assert.equal(r.reconcile([p], 1)[0].state, "running");
+    p.job.phase = undefined;
+    p.job.heartbeatSeq++;
+    assert.equal(r.reconcile([p], 2)[0].state, "unknown");
+    p.job = null;
+    p.pi = reporter({ kind });
+    assert.equal(r.reconcile([p], 3)[0].state, "unknown");
+    p.pi.heartbeatSeq++;
+    assert.equal(r.reconcile([p], 4)[0].state, "idle");
+    p.pi.state = "active";
+    p.pi.heartbeatSeq++;
+    assert.equal(r.reconcile([p], 5)[0].state, "active");
+    p.pi.state = undefined;
+    p.pi.heartbeatSeq++;
+    assert.equal(r.reconcile([p], 6)[0].state, "unknown");
+    p.pi = null;
+    assert.equal(r.reconcile([p], 7)[0].state, "unregistered");
+  });
+}
+
+test("fresh runner survives reporter removal, incompatible reports, and reporter restart", () => {
+  const diagnostics = [];
+  const r = new Reconciler(15, (message) => diagnostics.push(message));
+  const p = pane(
+    job({ kind: "interactive", runtime: "pi" }),
+    reporter({ jobId: "j" }),
+  );
+  r.reconcile([p], 0);
+  p.job.heartbeatSeq++;
+  p.pi.heartbeatSeq++;
+  assert.equal(r.reconcile([p], 1)[0].state, "idle");
+  p.pi = null;
+  assert.equal(r.reconcile([p], 2)[0].state, "running");
+  assert.equal(diagnostics.length, 1);
+  p.pi = reporter({ jobId: "other-job", state: "active", instanceId: "other" });
+  r.reconcile([p], 3);
+  p.pi.heartbeatSeq++;
+  assert.equal(r.reconcile([p], 4)[0].state, "running");
+  p.pi = reporter({ jobId: "j", state: "active", instanceId: "new" });
+  assert.equal(r.reconcile([p], 5)[0].state, "running");
+  p.pi.heartbeatSeq++;
+  assert.equal(r.reconcile([p], 6)[0].state, "active");
+  assert.equal(r.reconcile([p], 21)[0].state, "unknown");
+  p.job = job({ jobId: "next", kind: "interactive" });
+  p.pi = null;
+  r.reconcile([p], 22);
+  p.job.heartbeatSeq++;
+  assert.equal(r.reconcile([p], 23)[0].state, "running");
+  assert.equal(diagnostics.length, 2); // New workload does not inherit the prior reporter expectation.
 });

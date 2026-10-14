@@ -124,7 +124,7 @@ test("missing/unsupported capability retains full static summary; late discovery
       h.diagnostics.push(s),
     );
   adapter.publish(Array.from({ length: 20 }, () => ({ state: "active" })));
-  assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "R20");
+  assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "A20");
   assert.equal(adapter.capability, "missing");
   assert.equal(h.diagnostics.length, 1);
   let request;
@@ -331,19 +331,19 @@ test(
       // Without a compositor, it is an ordinary extension-status line.
       assert.equal(
         stripTerminalSequences(component.render(140).at(-1)),
-        "R20 C W2%",
+        "A20 C W2%",
       );
       h.start();
       // No dynamic registration: the full summary follows normal static placement.
       const wide = component.render(140);
       assert.equal(wide.length, 2);
-      assert.ok(stripTerminalSequences(wide[0]).endsWith("R20 • C W2%"));
+      assert.ok(stripTerminalSequences(wide[0]).endsWith("A20 • C W2%"));
       assert.ok(
-        !stripTerminalSequences(component.render(22)[0]).includes("R20"),
+        !stripTerminalSequences(component.render(22)[0]).includes("A20"),
       );
       h.ctx.ui.setStatus(STATUS_KEY, undefined);
       assert.ok(
-        !stripTerminalSequences(component.render(140)[0]).includes("R20"),
+        !stripTerminalSequences(component.render(140)[0]).includes("A20"),
       );
     } finally {
       h.stop();

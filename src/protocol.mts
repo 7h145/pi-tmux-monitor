@@ -5,7 +5,7 @@ export const OWNER = "@pi-tmux-monitor-owner";
 export const STATES = [
   "idle",
   "active",
-  "service",
+  "running",
   "success",
   "failed",
   "unknown",

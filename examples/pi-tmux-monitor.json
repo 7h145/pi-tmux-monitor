@@ -12,7 +12,7 @@
     "failed",
     "active",
     "idle",
-    "service",
+    "running",
     "success",
     "unknown",
     "unregistered"
@@ -22,7 +22,7 @@
     "active",
     "unknown",
     "unregistered",
-    "service",
+    "running",
     "idle",
     "success"
   ],
@@ -36,11 +36,11 @@
           "fg": "dim"
         },
         "active": {
-          "glyph": "R",
+          "glyph": "A",
           "fg": "accent"
         },
-        "service": {
-          "glyph": "S",
+        "running": {
+          "glyph": "R",
           "fg": "muted"
         },
         "success": {
@@ -72,7 +72,7 @@
           "glyph": "●",
           "fg": "accent"
         },
-        "service": {
+        "running": {
           "glyph": "◇",
           "fg": "muted"
         },

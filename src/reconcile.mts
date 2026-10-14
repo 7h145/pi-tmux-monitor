@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { matches } from "./protocol.mts";
 export class Reconciler {
-  constructor(staleAfterMs) {
+  constructor(staleAfterMs, diagnostic = (_message) => {}) {
     this.staleAfterMs = staleAfterMs;
+    this.diagnostic = diagnostic;
     this.sources = new Map();
     this.generations = new Map();
   }
@@ -56,18 +57,37 @@ export class Reconciler {
       this.generations.set(p.paneId, g);
       const compatible = matches(j, r),
         validJob = j && !g.invalidJobs.has(j.jobId);
+      const applicationState =
+        rf &&
+        (validJob ? compatible : !j || r.jobId === null) &&
+        ["idle", "active", "failed"].includes(r.state);
+      const ended = validJob && ["success", "failed"].includes(j.phase);
+      const generation = validJob
+        ? "job:" + j.jobId
+        : r && (!j || r.jobId === null)
+          ? "pi:" + r.processInstanceId + ":" + r.sessionId
+          : null;
+      // Confirm reporting before expecting it, so generic and intentionally
+      // uninstrumented commands do not produce missing-reporter diagnostics.
+      if (g.generation !== generation) {
+        g.generation = generation;
+        g.sawApplication = false;
+        g.reporterLost = false;
+      }
+      if (applicationState) {
+        g.sawApplication = true;
+        g.reporterLost = false;
+      } else if (!ended && generation && g.sawApplication && !g.reporterLost) {
+        g.reporterLost = true;
+        this.diagnostic(
+          `No fresh application state for pane ${p.paneId}; internal activity is unknown`,
+        );
+      }
       let state = "unknown";
       if (!j && !r) state = "unregistered";
-      else if (validJob && ["success", "failed"].includes(j.phase))
-        state = j.phase;
-      else if (validJob) {
-        const live = jf || (rf && compatible);
-        if (j.kind === "batch" && live) state = "active";
-        else if (j.kind === "service" && live) state = "service";
-        else if (j.kind === "interactive" && compatible && rf)
-          state = r.state ?? "unknown";
-      } else if (rf && (!j || r.jobId === null))
-        state = r.kind === "batch" ? "active" : (r.state ?? "unknown");
+      else if (ended) state = j.phase;
+      else if (applicationState) state = r.state;
+      else if (validJob && jf && j.phase === "running") state = "running";
       return { ...p, state };
     });
   }

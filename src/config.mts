@@ -9,7 +9,7 @@ export const DEFAULT_THEME = {
     STATES.map((s, i) => [
       s,
       {
-        glyph: ["_", "R", "S", "+", "!", "?", ":"][i],
+        glyph: ["_", "A", "R", "+", "!", "?", ":"][i],
         fg: ["dim", "accent", "muted", "success", "error", "warning", "dim"][i],
       },
     ]),
@@ -29,7 +29,7 @@ export const DEFAULTS = {
     "failed",
     "active",
     "idle",
-    "service",
+    "running",
     "success",
     "unknown",
     "unregistered",
@@ -39,7 +39,7 @@ export const DEFAULTS = {
     "active",
     "unknown",
     "unregistered",
-    "service",
+    "running",
     "idle",
     "success",
   ],

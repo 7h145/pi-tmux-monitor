@@ -35,7 +35,7 @@ export class Observer {
       tmuxFactory,
       clock,
     });
-    this.reconciler = new Reconciler(config.staleAfterMs);
+    this.reconciler = new Reconciler(config.staleAfterMs, diagnostic);
     this.cache = [];
     this.slots = [];
     this.running = false;
@@ -53,7 +53,10 @@ export class Observer {
         this.cache = [];
         this.slots = [];
         this.identity = undefined;
-        this.reconciler = new Reconciler(this.config.staleAfterMs);
+        this.reconciler = new Reconciler(
+          this.config.staleAfterMs,
+          this.diagnostic,
+        );
       }
       this.socket = project;
       this.selection = "project";
@@ -76,7 +79,10 @@ export class Observer {
       if (this.identity !== identity) {
         this.cache = [];
         this.slots = [];
-        this.reconciler = new Reconciler(this.config.staleAfterMs);
+        this.reconciler = new Reconciler(
+          this.config.staleAfterMs,
+          this.diagnostic,
+        );
         this.identity = identity;
       }
       const panes = await tmux.inventory(this.diagnostic);
