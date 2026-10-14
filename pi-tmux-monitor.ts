@@ -147,7 +147,7 @@ export default function monitor(pi: ExtensionAPI) {
   });
   pi.registerCommand("tmux-monitor", {
     description:
-      "Read-only tmux workload status, help, effective config and diagnostics",
+      "Tmux workload/server status, explicit workspace bootstrap, help, config and diagnostics",
     handler: monitorCommand(() => runtime, context),
   });
 }

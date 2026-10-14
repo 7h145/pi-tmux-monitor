@@ -5,14 +5,21 @@ import { access } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { lineage } from "./protocol.mts";
 import { Tmux } from "./tmux.mts";
+import { quote, formatLiteral } from "./shell.mts";
+import {
+  inspectServer,
+  socketDirectory,
+  createOwnedSession,
+  sessionOwner,
+  sessionName,
+} from "./server.mts";
 export const packageRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 export const helperPath = resolve(packageRoot, "scripts/pi-tmux-monitor.mjs");
 export const reporterPath = resolve(packageRoot, "pi-tmux-monitor.ts");
-export const quote = (value) =>
-  "'" + String(value).replaceAll("'", "'\\''") + "'";
+
 export function piArgs(
   args,
   mode,
@@ -143,63 +150,41 @@ export async function launch(plan) {
       " ",
     ) +
     `; code=$?; printf '\\nMonitored command exited %s\\n' "$code"; export PI_TMUX_MONITOR_EXIT_CODE="$code"; exec bash -i`;
-  let exists;
-  try {
-    await tmux.call("has-session", "-t", "=" + plan.session);
-    exists = true;
-  } catch {
-    exists = false;
-  }
-  const pane = exists
+  const server = await inspectServer(tmux);
+  if (server.state === "unavailable") throw Error(server.reason);
+  const existing = server.sessions.find(
+    (s) => s.name === sessionName(plan.session),
+  );
+  await socketDirectory(plan.socket);
+  const pane = existing
     ? await tmux.call(
+        "-N",
         "new-window",
         "-d",
         "-P",
         "-F",
         "#{pane_id}",
         "-t",
-        plan.session + ":",
+        existing.id + ":",
         "-n",
         plan.window,
         "-c",
-        plan.cwd,
+        formatLiteral(plan.cwd),
         command,
       )
-    : await tmux.call(
-        "new-session",
-        "-d",
-        "-P",
-        "-F",
-        "#{pane_id}",
-        "-s",
-        plan.session,
-        "-n",
-        plan.window,
-        "-c",
-        plan.cwd,
-        command,
-      );
+    : (
+        await createOwnedSession(tmux, {
+          name: plan.session,
+          cwd: plan.cwd,
+          window: plan.window,
+          owner: sessionOwner(plan.owner, plan.ancestors.slice(0, -1)),
+          command: [command],
+        })
+      ).paneId;
   if (!/^%\d+$/.test(pane))
     throw new Error(
       "Launch returned no pane identity; do not retry automatically",
     );
-  if (!exists) {
-    try {
-      await tmux.write(
-        "owner",
-        await tmux.call("display-message", "-p", "-t", pane, "#{session_id}"),
-        {
-          v: 1,
-          ownerSessionId: plan.owner,
-          ancestors: plan.ancestors.slice(0, -1),
-        },
-      );
-    } catch {
-      console.error(
-        "Monitor session ownership registration failed; pane may still be running",
-      );
-    }
-  }
   // A bounded startup check reports path/environment failures without retrying
   // creation. It does not wait for command completion or spend model tokens.
   for (let attempt = 0; attempt < 20; attempt++) {

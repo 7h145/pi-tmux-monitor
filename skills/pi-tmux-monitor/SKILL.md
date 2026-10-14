@@ -12,7 +12,8 @@ compatibility: Requires Node 22.19+, tmux and Pi; validated on Linux with Pi 1.1
 The helper is `../../scripts/pi-tmux-monitor.mjs` relative to this skill directory.
 Resolve that to an absolute path. Do not assume a globally installed executable.
 The package extension is `../../pi-tmux-monitor.ts`. The skill is guidance, not
-launch enforcement; the extension observes/reports and does not spawn work.
+launch enforcement; observation/reporting never spawns work. Explicit
+`/tmux-monitor tmux start` may create an owned, detached shell workspace.
 
 ## Obtain current launch context
 
@@ -31,6 +32,16 @@ Do not copy the launching process's `TMUX`/`TMUX_PANE` into a new pane.
 Select one socket, normally `$PWD/.agents/run/tmux-socket`. The helper can start a
 new dedicated session or create a window in an existing session. Create the socket's
 parent directory if needed. The observer alone never starts a server.
+
+Use `/tmux-monitor tmux` (`t`, `tmux status`, `tmux s`, `t status`, `t s`) for a
+fresh read-only server check. It lists all server sessions and creates no resources.
+Use `/tmux-monitor tmux start` (`t start`) only on explicit user intent to ensure
+an attachable workspace; `start` has no abbreviation. These commands select the
+configured socket or project `.agents/run/tmux-socket`, not inherited/default
+servers, and show when observation uses a different socket. Bootstrap needs current
+Pi owner/ancestry, preserves existing work and refuses ownership conflicts.
+It launches only an unregistered shell, not a Pi or job. Run its verified attach
+command manually if desired. No shutdown command or automatic bootstrap is provided.
 
 ## Ordinary command recipe
 
@@ -108,7 +119,8 @@ and degraded diagnostics.
 Use bare `/tmux-monitor` or `status` (`s`) for all cached pane rows. `help` (`h`)
 shows the active glyph legend and a verified, manually run attachment command;
 `config` (`c`) shows effective settings. Commands do not force a scan or control
-work. Help does not guess between multiple owned sessions.
+existing work. Only explicit `tmux start` creates resources. Help does not guess
+between multiple owned sessions.
 
 ## Adapt boxed-tmux or another launcher
 

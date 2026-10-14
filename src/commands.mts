@@ -8,6 +8,7 @@ import { STATES, STATE_DEFINITIONS } from "./protocol.mts";
 import { installationLabel } from "./version.mts";
 import { inspectionHint } from "./inspection.mts";
 import { STATUS_KEY } from "./footer.mts";
+import { serverCommand } from "./server.mts";
 import { renderTable, literalCell, noticeWidth } from "./tables.mts";
 
 const actions = {
@@ -22,8 +23,19 @@ const actions = {
   diagnostics: "diagnostics",
 };
 export function parseCommand(args) {
-  const value = args.trim();
-  return Object.hasOwn(actions, value) ? actions[value] : null;
+  const words = args.trim().split(/\s+/);
+  if (words[0] === "tmux" || words[0] === "t") {
+    if (
+      words.length === 1 ||
+      (words.length === 2 && ["status", "s"].includes(words[1]))
+    )
+      return "server-status";
+    if (words.length === 2 && words[1] === "start") return "server-start";
+    return null;
+  }
+  return words.length === 1 && Object.hasOwn(actions, words[0])
+    ? actions[words[0]]
+    : null;
 }
 export function collectSnapshot(current) {
   const observer = current?.observer;
@@ -100,9 +112,10 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
   return [
     `${strong(ctx, `${installationLabel(data.identity)}:`)} tmux workload awareness.`,
     "",
-    "Inspect cached workload states without changing work or configuration.",
+    "Inspect workload states and the tmux server; bootstrap a workspace explicitly.",
     "",
     strong(ctx, "Commands:"),
+    strong(ctx, "Workload inspection:"),
     command("/tmux-monitor status (s)", "Show every monitored pane (default)"),
     command(
       "/tmux-monitor help (h)",
@@ -113,6 +126,15 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
       "/tmux-monitor diagnostics (d)",
       "Show launch context and runtime health as JSON",
     ),
+    "",
+    strong(ctx, "Tmux server:"),
+    command("/tmux-monitor tmux (t)", "Check the project server (read-only)"),
+    command("/tmux-monitor tmux status (s)", "Same server check; tmux s / t s"),
+    command(
+      "/tmux-monitor tmux start",
+      "Start/reuse the project server",
+    ),
+    "  Also: t start. Start is the only mutating command; no shorthand.",
     "",
     strong(
       ctx,
@@ -148,6 +170,59 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
   ].join("\n");
 }
 
+export function serverText(ctx, data, result, start, width = noticeWidth()) {
+  const lines = [
+    `${strong(ctx, `${installationLabel(data.identity)}:`)} ${start ? "Tmux workspace bootstrap" : "Tmux server status"}.`,
+  ];
+  if (result.socket) lines.push(`Target socket: ${literalCell(result.socket)}`);
+  if (result.observerSocket)
+    lines.push(
+      `Observer uses a different socket: ${literalCell(result.observerSocket)}`,
+    );
+  if (result.state === "ready")
+    lines.push(
+      `Server: ${result.server}. Workspace: ${result.workspace}.`,
+      `Session: ${result.session.id} (${literalCell(result.session.name)}).`,
+      "",
+      "Run from the project root:",
+      "",
+      ` ${result.attach}`,
+    );
+  else if (result.state === "reachable") {
+    lines.push("Server: reachable.");
+    const sessions = result.sessions.slice(0, 256);
+    if (sessions.length)
+      lines.push(
+        "",
+        renderTable(
+          ctx,
+          ["Session", "Name"],
+          sessions.map((s) => [s.id, s.name]),
+          width,
+        ),
+      );
+    else lines.push("No sessions.");
+    if (result.sessions.length > sessions.length)
+      lines.push(
+        `${result.sessions.length - sessions.length} additional sessions omitted.`,
+      );
+  } else if (result.state === "absent")
+    lines.push("Server: absent. Nothing was created.");
+  else {
+    lines.push(`Server/workspace unavailable: ${literalCell(result.reason)}`);
+    if (result.session)
+      lines.push(
+        `Last observed session: ${result.session.id} (${literalCell(result.session.name)}).`,
+      );
+    if (result.partial)
+      lines.push(
+        "Creation was attempted; resources may remain. No rollback was performed.",
+        "Inspect the target socket before retrying; do not retry creation blindly.",
+      );
+  }
+  return lines.join("\n");
+}
+
 export function diagnosticData(current, context, data) {
   return {
     ...context,
@@ -165,6 +240,7 @@ export function monitorCommand(
   getCurrent,
   getContext,
   inspect = inspectionHint,
+  server = serverCommand,
 ) {
   return async (args, ctx) => {
     const action = parseCommand(args);
@@ -178,15 +254,27 @@ export function monitorCommand(
     }
     if (!ctx.hasUI) return;
     const current = getCurrent();
+    const owner = current?.owner;
     const live = () =>
       getCurrent() === current &&
       !current?.retired &&
-      (!current || ctx.sessionManager.getSessionId() === current.owner);
+      (!current ||
+        (current.owner === owner &&
+          ctx.sessionManager.getSessionId() === owner));
     if (!live()) return;
     if (action === "status") current?.observer?.expire();
     const data = collectSnapshot(current);
     let text;
-    if (action === "config")
+    if (action === "server-status" || action === "server-start") {
+      const result = await server(
+        current,
+        ctx.cwd,
+        action === "server-start",
+        live,
+      );
+      if (!live() || !ctx.hasUI) return;
+      text = serverText(ctx, data, result, action === "server-start");
+    } else if (action === "config")
       text = JSON.stringify(
         data.config ?? { error: "Effective monitor configuration unavailable" },
         null,
@@ -199,11 +287,15 @@ export function monitorCommand(
         2,
       );
     else if (action === "status") text = statusText(ctx, data);
-    else text = commandHelp(ctx, data, await inspect(current, ctx.cwd));
+    else {
+      const inspection = await inspect(current, ctx.cwd);
+      if (!live() || !ctx.hasUI) return;
+      text = commandHelp(ctx, data, inspection);
+    }
     if (!live() || !ctx.hasUI) return;
     // One focused notice, never a model message or appended conversation entry.
     ctx.ui.notify(
-      action === "status" || action === "help"
+      ["status", "help", "server-status", "server-start"].includes(action)
         ? ctx.ui.theme.fg("muted", text)
         : text,
       "info",

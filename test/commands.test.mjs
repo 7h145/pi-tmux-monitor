@@ -40,6 +40,7 @@ function current(config = DEFAULTS) {
     owner: "owner",
     identity: { version: "0.1.1", commit: "abc1234" },
     config,
+    ancestors: [],
     observer: {
       identity: "server",
       lastSuccessfulScanAt: 0,
@@ -72,6 +73,11 @@ test("strict command defaults, exact aliases, surrounding whitespace and invalid
     ["config", "config"],
     ["d", "diagnostics"],
     ["diagnostics", "diagnostics"],
+    ...["tmux", "t", "tmux status", "tmux s", "t status", "t s", "t\t s"].map(
+      (s) => [s, "server-status"],
+    ),
+    ["tmux start", "server-start"],
+    ["t\nstart", "server-start"],
   ]) {
     assert.equal(parseCommand(args), action);
     assert.equal(parseCommand(` \t${args}\n `), action);
@@ -87,6 +93,16 @@ test("strict command defaults, exact aliases, surrounding whitespace and invalid
     "attach",
     "h\ns",
     "config config",
+    "tmux st",
+    "t sta",
+    "tmux up",
+    "tmux stop",
+    "t start extra",
+    "tmux status extra",
+    "tmux start s",
+    "t h",
+    "Tmux",
+    "t S",
     "constructor",
     "__proto__",
   ])

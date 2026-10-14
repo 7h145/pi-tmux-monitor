@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Tmux } from "../src/tmux.mts";
 import { Observer } from "../src/observer.mts";
 import { DEFAULTS } from "../src/config.mts";
+import { inspectServer as inspectServerForTest } from "../src/server.mts";
 import { JOB, PI } from "../src/protocol.mts";
 import { parseCLI, launch, helperPath, reporterPath } from "../src/launch.mts";
 import { job, reporter } from "./fixtures.mjs";
@@ -572,3 +573,50 @@ test("disposable server: cached expiry and delayed completion preserve record re
     }
   });
 });
+
+test("helper shares atomic ownership creation for dotted names from a live foreground pane", async () =>
+  server(async ({ socket, tmux }) => {
+    const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
+    try {
+      process.env.TMUX = `${socket},${await tmux.call("display-message", "-p", "#{pid}")},0`;
+      process.env.TMUX_PANE = "%0";
+      const plan = cli(socket, ["true"]);
+      plan.session = "owned.with.dots";
+      const first = await launch(plan);
+      const session = await tmux.call(
+        "display-message",
+        "-p",
+        "-t",
+        first.paneId,
+        "#{session_id}",
+      );
+      assert.deepEqual(await tmux.record("owner", session), {
+        v: 1,
+        ownerSessionId: "owner",
+        ancestors: ["root"],
+      });
+      assert.equal(await tmux.record("owner", "$0"), null);
+      const second = await launch({ ...plan, jobId: "second-job" });
+      assert.equal(
+        await tmux.call(
+          "display-message",
+          "-p",
+          "-t",
+          second.paneId,
+          "#{session_id}",
+        ),
+        session,
+      );
+      assert.equal(
+        (await inspectServerForTest(tmux)).sessions.filter(
+          (s) => s.name === "owned_with_dots",
+        ).length,
+        1,
+      );
+    } finally {
+      for (const [key, value] of Object.entries(saved))
+        value === undefined
+          ? delete process.env[key]
+          : (process.env[key] = value);
+    }
+  }));

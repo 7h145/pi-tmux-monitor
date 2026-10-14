@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { Tmux } from "../src/tmux.mts";
 import { DEFAULTS } from "../src/config.mts";
 import { inspectionHint, readablePrefix } from "../src/inspection.mts";
-import { quote } from "../src/launch.mts";
+import { quote } from "../src/shell.mts";
 async function fixture(fn) {
   const root = await mkdtemp("/tmp/monitor-inspection-");
   const cwd = join(root, "project's root");

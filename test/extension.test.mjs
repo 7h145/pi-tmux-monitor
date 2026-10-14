@@ -299,3 +299,25 @@ test("slow initial observation stays quiet until later startup capability discov
       await starting;
     }
   }));
+
+test("loading, polling and server status never bootstrap an absent explicit socket", async () =>
+  scenario(async ({ emit, commands, agent, cwd, ctx, notices }) => {
+    const socket = join(cwd, "never-created/socket");
+    await writeFile(
+      join(agent, "pi-tmux-monitor.json"),
+      JSON.stringify({
+        socketPath: socket,
+        pollIntervalMs: 50,
+        heartbeatIntervalMs: 50,
+        staleAfterMs: 150,
+      }),
+    );
+    await emit("session_start");
+    await new Promise((r) => setTimeout(r, 150));
+    await commands.get("tmux-monitor").handler("t s", ctx);
+    assert.match(notices.at(-1), /Server: absent/);
+    const { access } = await import("node:fs/promises");
+    await assert.rejects(access(join(cwd, "never-created")), {
+      code: "ENOENT",
+    });
+  }));

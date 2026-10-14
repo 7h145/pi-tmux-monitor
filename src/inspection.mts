@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { realpath } from "node:fs/promises";
-import { relative, resolve } from "node:path";
 import { Tmux } from "./tmux.mts";
-import { quote } from "./launch.mts";
+import { attachmentCommand } from "./shell.mts";
 
 const sessionId = (value) => /^\$\d+$/.test(value ?? "");
 const plain = (value) =>
@@ -123,7 +122,7 @@ export async function inspectionHint(
       "Tmux inspection is unavailable; no verified attachment target.",
     );
   }
-  const command = `tmux -S ${quote(relative(resolve(cwd), socket) || socket)} attach -t ${quote(target)}`;
+  const command = attachmentCommand(socket, cwd, target);
   let hint = "In tmux: Prefix+s opens the session tree and pane previews.";
   try {
     // Prefixes inherit session/global settings; unlike registrations, use -A.

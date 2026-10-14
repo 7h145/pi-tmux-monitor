@@ -4,7 +4,8 @@ Compact tmux workload awareness for Pi. One character per eligible pane, in pane
 creation order; counts or an attention-first partial summary when space is tight.
 Use tmux's native **Prefix + s** (`choose-tree -Zs`) for inspection and previews.
 The monitor does not launch work, control panes or infer agent activity from
-terminal output, CPU use or process names. Launching is a separate helper action.
+terminal output, CPU use or process names. General launches are a separate helper
+action; explicit `/tmux-monitor tmux start` can create an owned shell workspace.
 
 ## Install and load
 
@@ -73,12 +74,17 @@ snapshot and does not update after the notice is displayed.
 | `/tmux-monitor help` | `h` | Commands, active-theme state legend and inspection hint |
 | `/tmux-monitor config` | `c` | Effective settings as prettified JSON |
 | `/tmux-monitor diagnostics` | `d` | Launch context, capability and runtime diagnostics as prettified JSON |
+| `/tmux-monitor tmux` | `t` | Fresh, read-only server status |
+| `/tmux-monitor tmux status` | `tmux s`, `t status`, `t s` | Same server check |
+| `/tmux-monitor tmux start` | `t start` | Ensure an owned, detached shell workspace exists |
 
-Arguments are complete lowercase words. Surrounding whitespace is accepted;
-unknown words and extra arguments are errors. Commands do not scan, change
-settings, start model requests, control work or enter their output in the model's
-conversation. Help alone performs bounded read-only tmux lookups to verify its
-attachment target and effective session prefix keys.
+Arguments are complete lowercase words separated by whitespace. Surrounding
+whitespace is accepted; unknown words and extra arguments are errors. `s` means
+status at both levels. `start` has no abbreviation; there is no `up` or shutdown
+command. Only `tmux start` mutates resources. Commands do not force observer scans,
+change settings, start model requests, control existing work or enter their output
+in the model's conversation. Help performs bounded read-only tmux lookups to
+verify its attachment target and effective session prefix keys.
 
 Status and help use Pi's current theme and this installation's package version.
 If the product has its own usable Git metadata, they also show its seven-character
@@ -92,6 +98,44 @@ single associated owned session from cached observation. Ambiguous, changed or
 unknown targets are explained rather than guessed. Prefix hints use the target's
 effective `prefix` and `prefix2`; failed lookups retain generic `Prefix+s` guidance
 without claiming the default is configured. The monitor never attaches for you.
+
+### Tmux server and workspace
+
+Server commands use effective `socketPath`, or `.agents/run/tmux-socket` under the
+current project root. They never fall back to inherited `TMUX`, a default server
+or another socket after failure. Output shows that target and identifies a
+different observer socket when applicable.
+
+`tmux`/`t` and `tmux status`/`t s` make a fresh, bounded check rather than reading
+cached workload rows. They list the server's session IDs and names, including
+sessions outside monitoring scope, and distinguish a reachable empty server,
+confirmed absence and inability to inspect. They create nothing, including
+directories. Missing tools, permissions, timeouts and incompatible output are
+inspection failures, not proof that a server is absent.
+
+`tmux start` explicitly ensures the server and one owner-specific workspace exist.
+It requires current Pi ownership/ancestry and resolved configuration. A new
+workspace is detached, starts an ordinary `/bin/sh` in the project directory
+using the server's environment, and receives session-local ownership. No Pi,
+runner, instrumented job or fake heartbeat is launched. Its spare shell can appear
+as `:` under normal scope rules.
+
+Repeated and concurrent starts converge on the same workspace. Reuse requires
+matching ownership and ancestry; it does not add windows, replace panes, send
+keys or disturb work. A conflicting or unmarked session is never adopted.
+The result reports what became reachable, was created or reused and provides a
+verified, shell-quoted manual attach command. No automatic attachment occurs.
+
+Bootstrap creates missing socket-parent directories without broadening existing
+permissions. It never deletes socket paths, kills servers or changes execution
+environments to recover from errors. A partial failure or timeout may leave
+resources behind; inspect before retrying rather than duplicating creation.
+Loading, reloading, polling and read-only commands never bootstrap a server.
+Normal observer polling discovers a newly available project server.
+
+A shared socket does not move the server into the caller's container or establish
+that server-side Node/Pi/package paths are available. The helper's execution
+environment limits still apply.
 
 ## Read the indicator
 
@@ -332,6 +376,9 @@ and also works when the package is installed beneath `node_modules`.
 - `src/commands.mts` separates command dispatch, cached snapshot collection and
   human/JSON presentation; `src/tables.mts` renders literal table cells before
   notification, with labelled fields at narrow widths.
+- `src/server.mts` supplies fresh server inspection and shared owned-session
+  creation for explicit workspace bootstrap and the helper.
+- `src/shell.mts` supplies shell quoting and verified attachment formatting.
 - `src/inspection.mts` supplies read-only help hints.
 - `src/version.mts` identifies this installation using its own manifest/Git data.
 - `pi-tmux-monitor.ts` wires public Pi lifecycle events and commands.

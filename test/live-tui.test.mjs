@@ -391,6 +391,38 @@ for (const [mode, activeTheme, producerFirst] of [
         output = await snapshot();
         assert.ok(!output.includes("Width-aware compositor"), output);
         assert.match(output, /"diagnostics":\s*\[\]/);
+        await tmux.call("resize-window", "-t", pane, "-x", "100", "-y", "60");
+        await tmux.call("send-keys", "-t", pane, "/tmux-monitor t s", "Enter");
+        await until(async () =>
+          (await snapshot()).includes("Tmux server status."),
+        );
+        assert.ok((await snapshot()).includes("Server: reachable."));
+        const beforeBootstrap = (await tmux.inventory()).length;
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/tmux-monitor t start",
+          "Enter",
+        );
+        await until(async () =>
+          (await snapshot()).includes("Workspace: created."),
+        ).catch(async (error) => {
+          throw Error(`${error.message}\n${await snapshot()}`);
+        });
+        assert.ok((await snapshot()).includes("attach -t"));
+        assert.equal((await tmux.inventory()).length, beforeBootstrap + 1);
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/tmux-monitor tmux start",
+          "Enter",
+        );
+        await until(async () =>
+          (await snapshot()).includes("Workspace: reused."),
+        );
+        assert.equal((await tmux.inventory()).length, beforeBootstrap + 1);
         await tmux.call("send-keys", "-t", pane, "/quit", "Enter");
         const final = await until(async () => {
           const r = await tmux.record("job", pane);
