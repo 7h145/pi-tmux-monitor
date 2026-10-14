@@ -5,7 +5,7 @@ import {
 import { loadConfig } from "./src/config.mjs";
 import { Reporter } from "./src/reporter.mjs";
 import { Observer } from "./src/observer.mjs";
-import { FooterAdapter } from "./src/footer.mjs";
+import { FooterAdapter, STATUS_KEY } from "./src/footer.mjs";
 import { helperPath } from "./src/launch.mjs";
 const BEGIN = "<pi-tmux-monitor-launch-context>",
   END = "</pi-tmux-monitor-launch-context>";
@@ -147,6 +147,7 @@ export default function monitor(pi: ExtensionAPI) {
         ...context(),
         scope: runtime?.config?.scope,
         capability: runtime?.footer?.capability ?? "not TUI",
+        statusKey: runtime?.footer ? STATUS_KEY : undefined,
         degraded: runtime?.observer?.degraded ?? false,
         slots:
           runtime?.observer?.slots.map((s: any) => ({

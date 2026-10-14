@@ -22,16 +22,23 @@ trial without installing:
 pi --no-extensions -e /absolute/path/to/pi-tmux-monitor/pi-tmux-monitor.ts
 ```
 
-Load `pi-footer-compositor` separately for width-aware first-line placement. The
-monitor discovers its dynamic-left v1 capability through Pi's public event bus;
-no compositor import, private footer patch or terminal-width estimate is used.
-Either extension start order works.
+Load `pi-footer-compositor` separately for width-aware placement in the footer's
+right-hand status group. The monitor uses
+`footer-compositor:right:0:tmux-monitor`, preferring a position before higher-order
+right statuses such as Git (`10`) and usage (`20`). Ordering is not a survival
+guarantee: the compositor allocates space to higher-order right producers first,
+so they can reduce the monitor to a partial summary or omit it altogether.
 
-Without that capability, the same key
-`footer-compositor:left:20:tmux-monitor` carries a full count summary. An older
-compositor places that static text; without a compositor, Pi shows it on its
-ordinary extension-status line. Host clipping can apply. This fallback **is not
-width-aware**. `/tmux-monitor` reports the current capability and any diagnostics.
+The monitor discovers the compositor's shared dynamic v1 capability through
+`footer-compositor:dynamic:*` on Pi's public event bus. No compositor import,
+private footer patch or terminal-width estimate is used. Either extension start
+order works.
+
+Without an active capability, the same right-side key carries a full count
+summary. The compositor places that static text in its right-hand group; without
+a compositor, Pi shows it on its ordinary extension-status line. Host clipping
+can apply. This fallback **is not width-aware**. `/tmux-monitor` reports
+`dynamic-v1` when registered, the status key, and any diagnostics.
 An unsupported/custom Pi footer can retain fallback placement even when the
 capability is present. The compositor is the only footer owner.
 
@@ -307,8 +314,9 @@ usage telemetry are implemented. Validation uses synthetic Pi events, isolated
 tmux sockets and Pi startup/help only, not provider calls or delegated-task results.
 Actual-compositor tests use its implementation and Pi's real FooterComponent;
 synthetic capability tests separately exercise failure/replacement cases.
-Regular/default and fullscreen/gaudy TUI placement, theme changes, resizing,
-reload and shutdown have also been checked on the baseline.
+Regular/default and fullscreen/gaudy right-side TUI placement with mixed
+static/dynamic producers, theme changes, resizing, reload and shutdown have also
+been checked on the baseline.
 
 From a source checkout:
 

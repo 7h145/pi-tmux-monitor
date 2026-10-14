@@ -90,9 +90,14 @@ work may already be running. Never automatically duplicate a failed launch.
 `_` idle, `R` active/batch, `S` service, `+` command success, `!` failure, `?` unknown,
 `:` eligible unregistered pane. Live discovery is initially unknown until a
 heartbeat advances. Stale/missing instrumentation reduces certainty. Settled
-interactive Pi is idle, not completed task work. Without width-aware compositor
-support, only a static count summary is provided; clipping may occur. Use
-`/tmux-monitor` for capability/degraded diagnostics.
+interactive Pi is idle, not completed task work.
+
+The monitor appears in the compositor's right-hand group, before higher-order statuses when space permits;
+those statuses can reduce or omit it on narrow terminals. Without an active
+width-aware capability, only a static count summary under the same right-side key
+is provided; clipping may occur. Without the compositor, that summary stays on
+Pi's ordinary extension-status line. Use `/tmux-monitor` for capability, status-key
+and degraded diagnostics.
 
 ## Adapt boxed-tmux or another launcher
 

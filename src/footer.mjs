@@ -1,6 +1,6 @@
 import { fullSummary, format } from "./formatter.mjs";
-export const STATUS_KEY = "footer-compositor:left:20:tmux-monitor";
-const PREFIX = "footer-compositor:dynamic-left:";
+export const STATUS_KEY = "footer-compositor:right:0:tmux-monitor";
+const PREFIX = "footer-compositor:dynamic:";
 // Structural protocol inspected in pi-footer-compositor's implementation.
 // Do not import the compositor or estimate budgets from terminal columns.
 export class FooterAdapter {
@@ -34,7 +34,7 @@ export class FooterAdapter {
         this.unregister?.();
         this.unregister = remove;
         this.instanceId = payload.instanceId;
-        this.capability = "dynamic-left-v1";
+        this.capability = "dynamic-v1";
       } catch {
         this.failedRegistration();
       }

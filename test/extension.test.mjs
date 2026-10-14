@@ -5,6 +5,7 @@ import { join } from "node:path";
 import monitor, { replaceContext } from "../pi-tmux-monitor.ts";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { Tmux } from "../src/tmux.mjs";
+import { STATUS_KEY } from "../src/footer.mjs";
 import { parseCLI, launch } from "../src/launch.mjs";
 const saved = { ...process.env };
 async function scenario(fn) {
@@ -126,6 +127,8 @@ test("extension session replacement, trust/config reload, diagnostics and child 
       );
       await commands.get("tmux-monitor").handler("", ctx);
       assert.equal(JSON.parse(notices.at(-1)).scope, "descendants");
+      assert.equal(JSON.parse(notices.at(-1)).statusKey, STATUS_KEY);
+      assert.equal(JSON.parse(notices.at(-1)).capability, "missing");
       const plan = parseCLI([
         "launch",
         "--socket",
