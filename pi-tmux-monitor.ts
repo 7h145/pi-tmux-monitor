@@ -5,8 +5,10 @@ import {
 import { loadConfig } from "./src/config.mts";
 import { Reporter } from "./src/reporter.mts";
 import { Observer } from "./src/observer.mts";
-import { FooterAdapter, STATUS_KEY } from "./src/footer.mts";
+import { FooterAdapter } from "./src/footer.mts";
 import { helperPath } from "./src/launch.mts";
+import { loadInstallationIdentity } from "./src/version.mts";
+import { monitorCommand } from "./src/commands.mts";
 const BEGIN = "<pi-tmux-monitor-launch-context>",
   END = "</pi-tmux-monitor-launch-context>";
 export function replaceContext(existing: string, block: string) {
@@ -68,6 +70,8 @@ export default function monitor(pi: ExtensionAPI) {
       ctx.isProjectTrusted(),
       diagnostic,
     );
+    if (current.retired) return;
+    current.identity = await loadInstallationIdentity();
     if (current.retired) return;
     current.reporter = new Reporter({
       sessionId: current.owner,
@@ -142,22 +146,8 @@ export default function monitor(pi: ExtensionAPI) {
       );
   });
   pi.registerCommand("tmux-monitor", {
-    description: "Show read-only tmux monitor launch context and diagnostics",
-    handler: async (_args, ctx) => {
-      const info = {
-        ...context(),
-        scope: runtime?.config?.scope,
-        capability: runtime?.footer?.capability ?? "not TUI",
-        statusKey: runtime?.footer ? STATUS_KEY : undefined,
-        degraded: runtime?.observer?.degraded ?? false,
-        slots:
-          runtime?.observer?.slots.map((s: any) => ({
-            paneId: s.paneId,
-            state: s.state,
-          })) ?? [],
-        diagnostics: runtime?.diagnostics ?? [],
-      };
-      ctx.ui.notify(JSON.stringify(info, null, 2), "info");
-    },
+    description:
+      "Read-only tmux workload status, help, effective config and diagnostics",
+    handler: monitorCommand(() => runtime, context),
   });
 }

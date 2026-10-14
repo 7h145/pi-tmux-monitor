@@ -88,7 +88,8 @@ export class Reconciler {
       else if (ended) state = j.phase;
       else if (applicationState) state = r.state;
       else if (validJob && jf && j.phase === "running") state = "running";
-      return { ...p, state };
+      const workload = validJob ? j : r && (!j || r.jobId === null) ? r : null;
+      return { ...p, state, workload };
     });
   }
 }

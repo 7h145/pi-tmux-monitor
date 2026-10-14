@@ -27,7 +27,8 @@
     "scripts",
     "skills",
     "examples",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

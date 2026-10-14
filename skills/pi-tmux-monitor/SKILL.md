@@ -16,7 +16,7 @@ launch enforcement; the extension observes/reports and does not spawn work.
 
 ## Obtain current launch context
 
-Use the extension's launch-context addendum or ask the user to run `/tmux-monitor`.
+Use the extension's launch-context addendum or ask the user to run `/tmux-monitor diagnostics`.
 Obtain **current** owner session ID, ancestry, socket, helper path and runner timing
 values. Do not invent an owner from a PID or reuse another conversation's ID.
 Pass these explicitly when custom shell tools do not inherit fresh Pi context.
@@ -80,7 +80,7 @@ intended; command lifecycle remains registered where possible.
 ```bash
 tmux -S "$SOCKET" list-sessions
 tmux -S "$SOCKET" attach -t agent-name
-# Inside tmux: Prefix + s, or tmux command prompt: choose-tree -Zs
+# Inside tmux: use the prefix shown by /tmux-monitor help, then s
 ```
 
 The helper returns the created pane/job identity, not the asynchronous command
@@ -102,8 +102,13 @@ The monitor appears in the compositor's right-hand group, before higher-order st
 those statuses can reduce or omit it on narrow terminals. Without an active
 width-aware capability, only a static count summary under the same right-side key
 is provided; clipping may occur. Without the compositor, that summary stays on
-Pi's ordinary extension-status line. Use `/tmux-monitor` for capability, status-key
+Pi's ordinary extension-status line. Use `/tmux-monitor diagnostics` for capability, status-key
 and degraded diagnostics.
+
+Use bare `/tmux-monitor` or `status` (`s`) for all cached pane rows. `help` (`h`)
+shows the active glyph legend and a verified, manually run attachment command;
+`config` (`c`) shows effective settings. Commands do not force a scan or control
+work. Help does not guess between multiple owned sessions.
 
 ## Adapt boxed-tmux or another launcher
 

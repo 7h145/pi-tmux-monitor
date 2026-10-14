@@ -35,7 +35,7 @@ async function scenario(fn) {
     isIdle: () => idle,
     isProjectTrusted: () => trusted,
     ui: {
-      theme: { fg: (_, s) => s },
+      theme: { fg: (_, s) => s, style: (s) => s },
       setStatus: (k, s) =>
         s === undefined ? statuses.delete(k) : statuses.set(k, s),
       notify: (s) => notices.push(s),
@@ -125,7 +125,7 @@ test("extension session replacement, trust/config reload, diagnostics and child 
           '"heartbeatIntervalMs":50',
         ),
       );
-      await commands.get("tmux-monitor").handler("", ctx);
+      await commands.get("tmux-monitor").handler("diagnostics", ctx);
       assert.equal(JSON.parse(notices.at(-1)).scope, "descendants");
       assert.equal(JSON.parse(notices.at(-1)).statusKey, STATUS_KEY);
       assert.equal(JSON.parse(notices.at(-1)).capability, "missing");
@@ -148,7 +148,7 @@ test("extension session replacement, trust/config reload, diagnostics and child 
       setSession("replacement");
       setTrusted(true);
       await emit("session_start");
-      await commands.get("tmux-monitor").handler("", ctx);
+      await commands.get("tmux-monitor").handler("diagnostics", ctx);
       const diagnostic = JSON.parse(notices.at(-1));
       assert.equal(diagnostic.owner, "replacement");
       assert.equal(diagnostic.scope, "server");
@@ -240,7 +240,7 @@ test("persistent absence warns once after startup, keeps fallback, and stops cle
     assert.equal(notices.filter((message) => message === warning).length, 1);
     assert.equal(statuses.get(STATUS_KEY), "+");
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await commands.get("tmux-monitor").handler("", ctx);
+    await commands.get("tmux-monitor").handler("diagnostics", ctx);
     const info = JSON.parse(notices.at(-1));
     assert.equal(info.capability, "missing");
     assert.equal(

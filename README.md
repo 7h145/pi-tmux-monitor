@@ -37,7 +37,7 @@ order works.
 Without an active capability, the same right-side key carries a full count
 summary. The compositor places that static text in its right-hand group; without
 a compositor, Pi shows it on its ordinary extension-status line. Host clipping
-can apply. This fallback **is not width-aware**. `/tmux-monitor` reports
+can apply. This fallback **is not width-aware**. `/tmux-monitor diagnostics` reports
 `dynamic-v1` when registered, the status key, and any diagnostics.
 An unsupported/custom Pi footer can retain fallback placement even when the
 capability is present. The compositor is the only footer owner.
@@ -47,6 +47,43 @@ scan finishes, the monitor allows one poll interval for a capability to appear
 before warning once about its absence. Successful registration cancels a pending
 warning, as does shutdown or reload. Persistent capability loss uses the same
 grace period and fallback.
+
+## Commands
+
+`/tmux-monitor` (or `status`, `s`) shows one row for every eligible pane in the
+cached footer snapshot, in creation order. It includes location, explicit label,
+kind, state, active glyph and meaning, without count aggregation or omission.
+An empty healthy inventory is explicit; unavailable or degraded observation is
+not presented as an empty healthy server. Missing identity fields are marked
+unavailable, not inferred from commands or output. Tables are rendered for the
+terminal width at invocation; narrow views use labelled fields rather than cramped
+columns. Run the command again after resizing to refresh its layout.
+
+| Command | Alias | View |
+|---|---|---|
+| `/tmux-monitor status` | `s` | All cached pane rows; the default view |
+| `/tmux-monitor help` | `h` | Commands, active-theme state legend and inspection hint |
+| `/tmux-monitor config` | `c` | Effective settings as prettified JSON |
+| `/tmux-monitor diagnostics` | `d` | Launch context, capability and runtime diagnostics as prettified JSON |
+
+Arguments are complete lowercase words. Surrounding whitespace is accepted;
+unknown words and extra arguments are errors. Commands do not scan, change
+settings, start model requests, control work or enter their output in the model's
+conversation. Help alone performs bounded read-only tmux lookups to verify its
+attachment target and effective session prefix keys.
+
+Status and help use Pi's current theme and this installation's package version.
+If the product has its own usable Git metadata, they also show its seven-character
+HEAD identity. Missing Git metadata omits the hash silently; a package without a
+valid version uses the unversioned `tmux-monitor` label. Parent/caller repositories
+are never used to identify an installed copy.
+
+Help displays one shell-quoted attachment command to run from the project root.
+It prefers the foreground Pi's verified tmux session; outside tmux it uses a
+single associated owned session from cached observation. Ambiguous, changed or
+unknown targets are explained rather than guessed. Prefix hints use the target's
+effective `prefix` and `prefix2`; failed lookups retain generic `Prefix+s` guidance
+without claiming the default is configured. The monitor never attaches for you.
 
 ## Read the indicator
 
@@ -81,14 +118,14 @@ defaults, confirmation can take one 5-second heartbeat plus a 2-second scan.
 Sources become stale after 15 seconds without advancement. Command outcomes do
 not expire while the pane remains and no reuse is known. On disconnection, eligible
 cached slots remain: live states are unknown, known outcomes remain, and
-`/tmux-monitor` reports degraded observation. Cached slots do not prove that panes
+`/tmux-monitor diagnostics` reports degraded observation. Cached slots do not prove that panes
 still exist. A replacement server starts a new inventory namespace.
 
 ## Launch ordinary commands directly
 
 No boxed-tmux skill is required. The stable entry is the package-relative
 `scripts/pi-tmux-monitor.mjs`; an npm bin of the same name is optional convenience.
-Use `/tmux-monitor` in the launching Pi to obtain its current **session ID**,
+Use `/tmux-monitor diagnostics` in the launching Pi to obtain its current **session ID**,
 ancestry, helper path, socket and runner timing values. A session ID is not a PID,
 hostname or tmux session name.
 
@@ -272,7 +309,15 @@ and also works when the package is installed beneath `node_modules`.
 - `src/reconcile.mts` applies ownership, generation and freshness policy.
 - `src/reporter.mts` observes this Pi's lifecycle; `src/runner.mjs` tracks a command.
 - `src/formatter.mts` is pure presentation; `src/footer.mts` adapts the compositor.
-- `pi-tmux-monitor.ts` wires public Pi lifecycle events and diagnostics.
+- `src/commands.mts` separates command dispatch, cached snapshot collection and
+  human/JSON presentation; `src/tables.mts` renders literal table cells before
+  notification, with labelled fields at narrow widths.
+- `src/inspection.mts` supplies read-only help hints.
+- `src/version.mts` identifies this installation using its own manifest/Git data.
+- `pi-tmux-monitor.ts` wires public Pi lifecycle events and commands.
+
+Identity lookup and themed command formatting adapt pi-oaistt code; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and licence.
 
 Only runners write `@pi-tmux-monitor-job`; only this Pi reporter writes
 `@pi-tmux-monitor-pi`. Both are pane-local atomic JSON, maximum 16 KiB. Session

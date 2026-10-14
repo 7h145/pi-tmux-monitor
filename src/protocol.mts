@@ -2,15 +2,17 @@
 export const JOB = "@pi-tmux-monitor-job";
 export const PI = "@pi-tmux-monitor-pi";
 export const OWNER = "@pi-tmux-monitor-owner";
-export const STATES = [
-  "idle",
-  "active",
-  "running",
-  "success",
-  "failed",
-  "unknown",
-  "unregistered",
-];
+export const STATE_DEFINITIONS = {
+  idle: "Fresh application reporting says settled, waiting for work",
+  active: "Fresh application reporting says the workload is doing work",
+  running: "Workload is known alive; internal activity is unavailable",
+  success:
+    "Monitored command exited successfully; not proof of task correctness",
+  failed: "Known command failure or final Pi-run error",
+  unknown: "Registered workload without a trustworthy state",
+  unregistered: "Eligible pane without a recognized monitor registration",
+};
+export const STATES = Object.keys(STATE_DEFINITIONS);
 const kinds = ["batch", "service", "interactive"];
 export const id = (x) =>
   typeof x === "string" &&

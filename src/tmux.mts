@@ -118,20 +118,29 @@ export class Tmux {
       "list-panes",
       "-a",
       "-F",
-      "#{pane_id}|#{session_id}|#{pane_pid}",
+      "#{pane_id}|#{session_id}|#{pane_pid}|#{window_id}|#{window_index}|#{pane_index}",
     );
     const sessions = new Map(),
       panes = new Map();
     for (const line of rows.split("\n")) {
-      const [paneId, sessionId, pid] = line.split("|");
+      const [paneId, sessionId, pid, windowId, windowIndex, paneIndex] =
+        line.split("|");
       if (!/^%\d+$/.test(paneId) || !/^\$\d+$/.test(sessionId)) continue;
       if (!sessions.has(sessionId)) sessions.set(sessionId, null);
       if (!panes.has(paneId))
-        panes.set(paneId, { paneId, pid, sessionIds: [] });
+        panes.set(paneId, {
+          paneId,
+          pid,
+          windowId,
+          windowIndex,
+          paneIndex,
+          sessionIds: [],
+        });
       panes.get(paneId).sessionIds.push(sessionId);
     }
     for (const sid of sessions.keys())
       sessions.set(sid, {
+        id: sid,
         name: await this.call(
           "display-message",
           "-p",

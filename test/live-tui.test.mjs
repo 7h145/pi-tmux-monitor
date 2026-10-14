@@ -72,6 +72,12 @@ for (const [mode, activeTheme, producerFirst] of [
               "@earendil-works/pi-tui",
               import.meta.resolve("@earendil-works/pi-tui"),
             )
+            .replaceAll(
+              '"@earendil-works/pi-coding-agent"',
+              JSON.stringify(
+                import.meta.resolve("@earendil-works/pi-coding-agent"),
+              ),
+            )
             .replace(STATUS_KEY, warmKey);
           await writeFile(
             join(bundle, "src", name.replace(/\.mts$/, ".mjs")),
@@ -175,7 +181,14 @@ for (const [mode, activeTheme, producerFirst] of [
           synth,
         ]);
         pane = (await launch(plan)).paneId;
-        const first = await until(() => tmux.record("pi", pane));
+        let first;
+        try {
+          first = await until(() => tmux.record("pi", pane));
+        } catch (error) {
+          throw Error(
+            `${error.message}\n${await tmux.call("capture-pane", "-p", "-S", "-100", "-t", pane)}`,
+          );
+        }
         assert.equal(first.state, "idle");
         await launch(
           parseCLI([
@@ -197,7 +210,13 @@ for (const [mode, activeTheme, producerFirst] of [
         const snapshot = () =>
           tmux.call("capture-pane", "-p", "-t", pane, "-S", "-60");
         const block = `${unregistered}${outcome} • clean • C W2% • dyn`;
-        await tmux.call("send-keys", "-t", pane, "/tmux-monitor", "Enter");
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/tmux-monitor diagnostics",
+          "Enter",
+        );
         await until(async () => (await snapshot()).includes(warmKey));
         assert.ok(!(await snapshot()).includes("Width-aware compositor"));
         await writeFile(entry, currentEntry);
@@ -227,7 +246,13 @@ for (const [mode, activeTheme, producerFirst] of [
             return line;
           });
         await placement(100);
-        await tmux.call("send-keys", "-t", pane, "/tmux-monitor", "Enter");
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/tmux-monitor diagnostics",
+          "Enter",
+        );
         await until(async () => {
           const output = await snapshot();
           return output.includes("dynamic-v1") && output.includes(STATUS_KEY);
@@ -238,6 +263,38 @@ for (const [mode, activeTheme, producerFirst] of [
         assert.ok(output.includes("(ro)"));
         assert.ok(output.includes("C W2%"));
         assert.ok(output.includes("ordinary"));
+        await tmux.call("send-keys", "-t", pane, "/tmux-monitor", "Enter");
+        await until(async () =>
+          (await snapshot()).includes("2 monitored panes."),
+        );
+        output = await snapshot();
+        assert.ok(output.includes("unregistered"), output);
+        assert.ok(output.includes("success"), output);
+        assert.ok(output.includes("┌") && output.includes("┼"), output);
+        assert.ok(!output.includes("| --- |"), output);
+        // Fullscreen has no tmux scrollback; give the complete notice room.
+        await tmux.call("resize-window", "-t", pane, "-x", "100", "-y", "60");
+        await tmux.call("send-keys", "-t", pane, "/tmux-monitor help", "Enter");
+        try {
+          await until(async () => {
+            const text = await snapshot();
+            return (
+              text.includes("Commands:") &&
+              text.includes(`active theme ${activeTheme}`) &&
+              text.includes("Ctrl+b")
+            );
+          });
+        } catch (error) {
+          throw Error(`${error.message}\n${await snapshot()}`);
+        }
+        output = await snapshot();
+        assert.ok(output.includes("/tmux-monitor config (c)"), output);
+        assert.ok(output.includes("tmux-monitor v0.1.0:"), output);
+        assert.ok(output.includes("┌") && output.includes("┼"), output);
+        assert.ok(
+          !output.includes("| --- |") && !output.includes("\\_"),
+          output,
+        );
         const rawBefore = await tmux.call(
           "capture-pane",
           "-p",
@@ -259,6 +316,23 @@ for (const [mode, activeTheme, producerFirst] of [
         );
         await tmux.call("resize-window", "-t", pane, "-x", "45", "-y", "24");
         await placement(45);
+        await tmux.call("send-keys", "-t", pane, "/tmux-monitor s", "Enter");
+        await until(async () => (await snapshot()).includes("Glyph:"));
+        output = await snapshot();
+        assert.ok(
+          output.includes("Pane:") && output.includes("Meaning:"),
+          output,
+        );
+        assert.ok(!output.includes("| --- |"), output);
+        await tmux.call("send-keys", "-t", pane, "/tmux-monitor h", "Enter");
+        await new Promise((r) => setTimeout(r, 100));
+        await until(async () =>
+          (await snapshot()).includes("Attachment is manual"),
+        );
+        for (const line of (
+          await tmux.call("capture-pane", "-p", "-t", pane)
+        ).split("\n"))
+          assert.ok(visibleWidth(line) <= 45);
         await tmux.call("send-keys", "-t", pane, "/reload", "Enter");
         const reloaded = await until(async () => {
           const r = await tmux.record("pi", pane);
@@ -311,7 +385,13 @@ for (const [mode, activeTheme, producerFirst] of [
               line.trimEnd().endsWith(`clean • C W2% • dyn • ~${outcome}`),
             );
         });
-        await tmux.call("send-keys", "-t", pane, "/tmux-monitor", "Enter");
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/tmux-monitor diagnostics",
+          "Enter",
+        );
         await until(async () =>
           (await snapshot()).replace(/\s+/g, "").includes(changedKey),
         );
