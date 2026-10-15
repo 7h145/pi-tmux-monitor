@@ -38,7 +38,7 @@ const gaudy = JSON.parse(
 function current(config = DEFAULTS) {
   return {
     owner: "owner",
-    identity: { version: "0.1.1", commit: "abc1234" },
+    identity: { version: "0.2.0", commit: "abc1234" },
     config,
     ancestors: [],
     observer: {
@@ -114,7 +114,7 @@ test("status rows preserve every full-strip state and snapshot order, not footer
   const data = collectSnapshot(runtime);
   const text = stripTerminalSequences(statusText(ctx, data, 240));
   assert.ok(
-    text.startsWith("tmux-monitor v0.1.1 (abc1234): 7 monitored panes."),
+    text.startsWith("tmux-monitor v0.2.0 (abc1234): 7 monitored panes."),
   );
   assert.equal(
     stripTerminalSequences(format(data.slots, DEFAULTS, ctx.ui.theme, 7).text),
@@ -183,7 +183,7 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
     const plain = stripTerminalSequences(output);
     assert.ok(
       plain.startsWith(
-        "tmux-monitor v0.1.1 (abc1234): tmux workload awareness.",
+        "tmux-monitor v0.2.0 (abc1234): tmux workload awareness.",
       ),
     );
     assert.ok(plain.indexOf("Commands:") < plain.indexOf("States"));

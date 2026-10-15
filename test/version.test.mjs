@@ -19,7 +19,7 @@ const exec = promisify(execFile);
 const manifest = (root) =>
   writeFile(
     join(root, "package.json"),
-    '{"name":"pi-tmux-monitor","version":"0.1.1"}',
+    '{"name":"pi-tmux-monitor","version":"0.2.0"}',
   );
 async function fixture(fn) {
   const root = await mkdtemp("/tmp/monitor-identity-");
@@ -48,18 +48,18 @@ async function repository(root) {
 
 test("own installation version and optional Git label, including safe unversioned output", () => {
   assert.equal(
-    installationLabel({ version: "0.1.1", commit: "abc1234" }),
-    "tmux-monitor v0.1.1 (abc1234)",
+    installationLabel({ version: "0.2.0", commit: "abc1234" }),
+    "tmux-monitor v0.2.0 (abc1234)",
   );
-  assert.equal(installationLabel({ version: "0.1.1" }), "tmux-monitor v0.1.1");
+  assert.equal(installationLabel({ version: "0.2.0" }), "tmux-monitor v0.2.0");
   assert.equal(installationLabel({}), "tmux-monitor");
   assert.equal(
     installationLabel({ version: "bad\x1b", commit: "abc1234" }),
     "tmux-monitor",
   );
   assert.equal(
-    installationLabel({ version: "0.1.1", commit: "unavailable" }),
-    "tmux-monitor v0.1.1",
+    installationLabel({ version: "0.2.0", commit: "unavailable" }),
+    "tmux-monitor v0.2.0",
   );
 });
 
@@ -75,11 +75,11 @@ test("package subdirectories cannot borrow a parent repository or invalid manife
         calls++;
         return "a".repeat(40);
       }),
-      { version: "0.1.1" },
+      { version: "0.2.0" },
     );
     assert.equal(calls, 0);
     for (const pkg of [
-      { name: "wrong", version: "0.1.1" },
+      { name: "wrong", version: "0.2.0" },
       { name: "pi-tmux-monitor", version: "bad" },
       { name: "pi-tmux-monitor" },
     ]) {
@@ -112,7 +112,7 @@ test("own Git identity survives symlink/worktree installs and ignores repository
     });
     try {
       assert.deepEqual(await loadInstallationIdentity(linked), {
-        version: "0.1.1",
+        version: "0.2.0",
         commit: head.slice(0, 7),
       });
     } finally {
@@ -133,7 +133,7 @@ test("own Git identity survives symlink/worktree installs and ignores repository
     ]);
     await manifest(worktree);
     assert.deepEqual(await loadInstallationIdentity(worktree), {
-      version: "0.1.1",
+      version: "0.2.0",
       commit: head.slice(0, 7),
     });
   }));
@@ -150,14 +150,14 @@ test("missing Git, malformed output and bounded timeout silently omit optional c
     ]) {
       assert.deepEqual(
         await loadInstallationIdentity(root, async () => output),
-        { version: "0.1.1" },
+        { version: "0.2.0" },
       );
     }
     assert.deepEqual(
       await loadInstallationIdentity(root, async () => {
         throw Error("unavailable");
       }),
-      { version: "0.1.1" },
+      { version: "0.2.0" },
     );
     const path = process.env.PATH;
     const bin = join(root, "bin");
@@ -165,7 +165,7 @@ test("missing Git, malformed output and bounded timeout silently omit optional c
     try {
       process.env.PATH = bin;
       assert.deepEqual(await loadInstallationIdentity(root), {
-        version: "0.1.1",
+        version: "0.2.0",
       });
       const git = join(bin, "git");
       await writeFile(
@@ -175,7 +175,7 @@ test("missing Git, malformed output and bounded timeout silently omit optional c
       await chmod(git, 0o755);
       const start = performance.now();
       assert.deepEqual(await loadInstallationIdentity(root), {
-        version: "0.1.1",
+        version: "0.2.0",
       });
       assert.ok(performance.now() - start < 1800);
     } finally {
