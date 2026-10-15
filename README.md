@@ -328,5 +328,9 @@ your own tools without loading the skill.
 
 Tests use isolated tmux servers and offline Pi startup, not provider
 requests. Live provider-backed behavior and broader platform compatibility
-have not been validated. Adapted code and its license are documented in
+have not been validated.
+
+## License
+
+[MIT](LICENSE). Adapted code and its attribution are documented in
 [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -2,6 +2,7 @@
   "name": "pi-tmux-monitor",
   "version": "0.1.1",
   "description": "tmux workload awareness for Pi",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
@@ -29,6 +30,7 @@
     "examples",
     "docs",
     "README.md",
+    "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
   "peerDependencies": {
