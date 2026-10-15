@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import {
   getAgentDir,
   type ExtensionAPI,
@@ -50,6 +51,7 @@ export default function monitor(pi: ExtensionAPI) {
       diagnostics: [],
       seen: new Set(),
       owner: ctx.sessionManager.getSessionId(),
+      cwd: ctx.cwd,
     };
     runtime = current;
     const diagnostic = (message: string) => {
@@ -127,10 +129,11 @@ export default function monitor(pi: ExtensionAPI) {
     return {
       owner: runtime.owner,
       ancestors: runtime.ancestors ?? [],
-      socket:
-        runtime.observer?.socket ??
-        runtime.config.socketPath ??
-        "automatic: project .agents/run/tmux-socket, then inherited TMUX",
+      socket: resolve(
+        runtime.cwd,
+        runtime.config.socketPath ?? ".agents/run/tmux-socket",
+      ),
+      observerSocket: runtime.observer?.socket ?? null,
       helper: helperPath,
       heartbeatIntervalMs: runtime.config.heartbeatIntervalMs,
       tmuxTimeoutMs: runtime.config.tmuxTimeoutMs,
@@ -147,7 +150,7 @@ export default function monitor(pi: ExtensionAPI) {
   });
   pi.registerCommand("tmux-monitor", {
     description:
-      "Tmux workload/server status, explicit workspace bootstrap, help, config and diagnostics",
+      "Tmux workload/project server status, startup, help, config and diagnostics",
     handler: monitorCommand(() => runtime, context),
   });
 }

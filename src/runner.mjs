@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
-import { access } from "node:fs/promises";
+import { access, stat, writeFile, rename } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { resolve, delimiter } from "node:path";
 import { Tmux } from "./tmux.mts";
 import { parseTmux } from "./protocol.mts";
 import { reporterPath } from "./launch.mts";
@@ -64,18 +66,50 @@ export async function run(plan, env = process.env) {
       .removeOwned("job", pane, "jobId", previous.jobId)
       .catch(() => console.error("Monitor prior-job cleanup failed"));
   await write();
-  if (plan.runtime === "pi" && !plan.uninstrumented) {
+  const acknowledge = async (state, reason) => {
+    if (!plan.ackPath) return;
     try {
-      await access(reporterPath);
-    } catch {
-      record.phase = "failed";
-      record.exitCode = 127;
-      await write();
-      console.error(
-        "Pi reporter path unavailable in the tmux server environment; use --uninstrumented explicitly if intended",
+      await writeFile(
+        plan.ackPath + ".tmp",
+        JSON.stringify({ state, reason }),
+        { mode: 0o600 },
       );
-      return 127;
+      await rename(plan.ackPath + ".tmp", plan.ackPath);
+    } catch {
+      /* A timed-out caller may already have retired its acknowledgement. */
     }
+  };
+  async function executable(name) {
+    const candidates = name.includes("/")
+      ? [resolve(plan.cwd, name)]
+      : (env.PATH ?? "")
+          .split(delimiter)
+          .map((dir) => resolve(dir || plan.cwd, name));
+    for (const path of candidates)
+      try {
+        await access(path, fsConstants.X_OK);
+        if ((await stat(path)).isFile()) return;
+      } catch {}
+    throw Error(
+      "Requested executable or retained Bash shell is unavailable on the server",
+    );
+  }
+  try {
+    if (!(await stat(plan.cwd)).isDirectory())
+      throw Error("Working directory unavailable on the server");
+    await executable("bash");
+    await executable(plan.argv[0]);
+    if (plan.runtime === "pi" && !plan.uninstrumented)
+      await access(reporterPath);
+  } catch {
+    const reason =
+      "Server-side working directory, executable, Bash or required Pi reporter is unavailable";
+    record.phase = "failed";
+    record.exitCode = 127;
+    await write();
+    await acknowledge("unavailable", reason);
+    console.error(reason);
+    return 127;
   }
   const childEnv = {
     ...env,
@@ -106,7 +140,14 @@ export async function run(plan, env = process.env) {
   );
   for (const [signal, handler] of handlers) process.on(signal, handler);
   const result = await new Promise((resolve) => {
+    child.once("spawn", () => {
+      void acknowledge("ready");
+    });
     child.once("error", () => {
+      void acknowledge(
+        "unavailable",
+        "Requested executable could not start on the server",
+      );
       console.error("Monitored command could not start");
       resolve({ code: 127, signal: null });
     });

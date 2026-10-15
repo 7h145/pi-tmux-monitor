@@ -40,13 +40,28 @@ export class Tmux {
     // No -A: names present here are local, not format-lookup inheritance.
     if (!local.split("\n").some((line) => line.startsWith(option + " ")))
       return null;
-    return parseRecord(
-      await this.call("show-options", ...scope, "-v", "-t", target, option),
-      type,
-      target,
-      diagnostic,
-    );
+    let raw;
+    try {
+      raw = await this.call(
+        "show-options",
+        ...scope,
+        "-v",
+        "-t",
+        target,
+        option,
+      );
+    } catch (error) {
+      // A reporter may retire between the local-option listing and value read.
+      if (
+        error.code === 1 &&
+        (error.stderr ?? "").trim() === `invalid option: ${option}`
+      )
+        return null;
+      throw error;
+    }
+    return parseRecord(raw, type, target, diagnostic);
   }
+
   async write(type, target, record, guard = undefined) {
     const option = { job: JOB, pi: PI, owner: OWNER }[type];
     const raw = JSON.stringify(record);
@@ -69,6 +84,9 @@ export class Tmux {
       );
       const owned = patterns.reduce((a, b) => `#{||:${a},${b}}`);
       const server = `#{&&:#{==:#{pid},${pid}},#{==:#{start_time},${start}}}`;
+      // An absence observation is only permission to create a pane-local
+      // option, not to replace a record that arrived since that observation.
+      // Native -o tests local presence; format lookup would inherit options.
       const condition = guard.allowAbsent ? server : `#{&&:${server},${owned}}`;
       const literal = "'" + raw.replaceAll("'", "'\\''") + "'";
       await this.call(
@@ -77,7 +95,7 @@ export class Tmux {
         "-t",
         target,
         condition,
-        `set-option -p -t ${target} ${option} ${literal}`,
+        `set-option -p ${guard.allowAbsent ? "-o -q " : ""}-t ${target} ${option} ${literal}`,
       );
       return;
     }

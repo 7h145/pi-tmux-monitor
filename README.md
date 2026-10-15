@@ -1,490 +1,332 @@
 # pi-tmux-monitor
 
-Compact tmux workload awareness for Pi. One character per eligible pane, in pane
-creation order; counts or an attention-first partial summary when space is tight.
-Use tmux's native **Prefix + s** (`choose-tree -Zs`) for inspection and previews.
-The monitor does not launch work, control panes or infer agent activity from
-terminal output, CPU use or process names. General launches are a separate helper
-action; explicit `/tmux-monitor tmux start` can create an owned shell workspace.
+See the state of your background Pi sessions and commands without switching
+between tmux terminals.
 
-## Install and load
+- [What this is](#what-this-is)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Reading the indicator](#reading-the-indicator)
+- [Starting tasks from a shell](#starting-tasks-from-a-shell)
+- [Configuration](#configuration)
+- [Privacy and limits](#privacy-and-limits)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
 
-Requires Node 22.19+, tmux and Pi. The validated baseline is **Pi 1.1.0,
-tmux 3.5a, Node 26.10.0, Linux**. Other versions/platforms are not established.
+## What this is
 
-```bash
+When Pi has tests running in one terminal, a service in another and a second
+Pi session working elsewhere, it is easy to lose track of them.
+pi-tmux-monitor adds a small indicator to Pi's footer so you can see which
+are active, idle, still running or finished. Open its status view when you
+need to know which task a symbol belongs to.
+
+A tmux pane is a terminal within a tmux window. The indicator summarizes
+the panes you are monitoring, using symbols or counts. Pi sessions running
+the extension report their own activity; other commands can report that
+they are running or have exited. The monitor does not guess activity from
+terminal output, CPU use or process names.
+
+The package includes the Pi extension, a skill that teaches Pi how to start
+monitored tasks, and a command-line script for starting them yourself. You
+can inspect their terminals with ordinary tmux. Monitoring does not take
+control of those terminals or decide whether a task's result is correct.
+
+## Requirements
+
+- Pi, with its interactive terminal UI for the footer and status views.
+- Node.js 22.19 or newer.
+- tmux, accessible from the environment where Pi runs.
+- For commands started through the launch script: Bash, Node and the
+  requested program must also be available where the tmux server runs.
+
+Tested on Linux with Pi 1.1.0, tmux 3.5a, and Node 22.19.0 and 26.10.0.
+Other Pi/tmux versions and operating systems have not been tested.
+
+## Installation
+
+Install for your Pi sessions:
+
+```sh
+pi install git:github.com/7h145/pi-tmux-monitor
+```
+
+This is a personal/global install. Add `-l` for a project-local install;
+Pi loads project packages only after you trust the project. Run Pi's
+**`/reload`** if it is already running.
+
+You can also install a local checkout:
+
+```sh
 pi install /absolute/path/to/pi-tmux-monitor
 ```
 
-This package declares its extension and optional companion skill. For a one-run
-trial without installing:
+To try just the extension from a checkout without installing it:
 
-```bash
+```sh
 pi --no-extensions -e /absolute/path/to/pi-tmux-monitor/pi-tmux-monitor.ts
 ```
 
-Load `pi-footer-compositor` separately for width-aware placement in the footer's
-right-hand status group. The monitor uses
-`footer-compositor:right:0:tmux-monitor`, preferring a position before higher-order
-right statuses such as Git (`10`) and usage (`20`). Ordering is not a survival
-guarantee: the compositor allocates space to higher-order right producers first,
-so they can reduce the monitor to a partial summary or omit it altogether.
+That command loads the checkout's extension explicitly and disables other
+discovered extensions. It does not add the checkout's skill; install the
+package to load that too. Avoid loading two copies of the extension.
+Pi supplies its runtime modules; no build step is needed.
 
-The monitor discovers the compositor's shared dynamic v1 capability through
-`footer-compositor:dynamic:*` on Pi's public event bus. No compositor import,
-private footer patch or terminal-width estimate is used. Either extension start
-order works.
+Loading the monitor does not start a tmux server, launch tasks or make
+model requests.
 
-Without an active capability, the same right-side key carries a full count
-summary. The compositor places that static text in its right-hand group; without
-a compositor, Pi shows it on its ordinary extension-status line. Host clipping
-can apply. This fallback **is not width-aware**. `/tmux-monitor diagnostics` reports
-`dynamic-v1` when registered, the status key, and any diagnostics.
-An unsupported/custom Pi footer can retain fallback placement even when the
-capability is present. The compositor is the only footer owner.
+## Usage
 
-Static fallback publication does not wait for discovery. After the initial tmux
-scan finishes, the monitor allows one poll interval for a capability to appear
-before warning once about its absence. Successful registration cancels a pending
-warning, as does shutdown or reload. Persistent capability loss uses the same
-grace period and fallback.
+Start with **`/tmux-monitor`**. It shows the panes included in monitoring,
+their locations, labels and current states. An empty list can be normal:
+by default, the monitor follows work associated with your current Pi
+conversation, not everything on a shared tmux server.
 
-## Commands
+The included skill gives Pi instructions for launching monitored work.
+For a small first check, you can ask Pi:
 
-`/tmux-monitor` (or `status`, `s`) shows one row for every eligible pane in the
-cached footer snapshot, in creation order. It includes location, explicit label,
-kind, state, active glyph and meaning, without count aggregation or omission.
-An empty healthy inventory is explicit; unavailable or degraded observation is
-not presented as an empty healthy server. Missing identity fields are marked
-unavailable, not inferred from commands or output. Tables are rendered for the
-terminal width at invocation; narrow views use labelled fields rather than cramped
-columns. Run the command again after resizing to refresh its layout.
+> Run `sleep 10` in tmux using pi-tmux-monitor.
 
-Status never starts or waits for an inventory scan. It first expires stale cached
-live evidence and updates the footer. When the last successful scan is at least
-`staleAfterMs` old, it shows a separate line above the rows, for example
-`Cached inventory — last successful scan 32s ago.` This also appears for an empty
-cache. If no scan has succeeded, status says so; observation failures are reported
-immediately, without waiting for this age threshold. The age describes that
-snapshot and does not update after the notice is displayed.
+After the task is discovered and its status is confirmed, it can show `R`
+for running, then `+` after it exits successfully. Very short commands may
+finish before you see the running state. Run **`/tmux-monitor`** again to
+find the task's terminal. Starting work through the skill is an ordinary
+agent action in response to your request, not something the extension does
+on its own.
 
-| Command | Alias | View |
-|---|---|---|
-| `/tmux-monitor status` | `s` | All cached pane rows; the default view |
-| `/tmux-monitor help` | `h` | Commands, active-theme state legend and inspection hint |
-| `/tmux-monitor config` | `c` | Effective settings as prettified JSON |
-| `/tmux-monitor diagnostics` | `d` | Launch context, capability and runtime diagnostics as prettified JSON |
-| `/tmux-monitor tmux` | `t` | Fresh, read-only server status |
-| `/tmux-monitor tmux status` | `tmux s`, `t status`, `t s` | Same server check |
-| `/tmux-monitor tmux start` | `t start` | Ensure an owned, detached shell workspace exists |
+### Inspect a terminal
 
-Arguments are complete lowercase words separated by whitespace. Surrounding
-whitespace is accepted; unknown words and extra arguments are errors. `s` means
-status at both levels. `start` has no abbreviation; there is no `up` or shutdown
-command. Only `tmux start` mutates resources. Commands do not force observer scans,
-change settings, start model requests, control existing work or enter their output
-in the model's conversation. Help performs bounded read-only tmux lookups to
-verify its attachment target and effective session prefix keys.
+Use **`/tmux-monitor help`** for an attachment command and your tmux prefix
+keys. When it can identify the right session, help prints a command you
+can run in another terminal. If the session is ambiguous or unavailable,
+it explains that instead of guessing. It never attaches for you.
 
-Status and help use Pi's current theme and this installation's package version.
-If the product has its own usable Git metadata, they also show its seven-character
-HEAD identity. Missing Git metadata omits the hash silently; a package without a
-valid version uses the unversioned `tmux-monitor` label. Parent/caller repositories
-are never used to identify an installed copy.
+Once attached, press **Prefix, then s** to open tmux's session/window tree
+with previews. The default is **Ctrl+b, then s**, but your settings may
+use another prefix. Input, interrupts and cleanup remain ordinary tmux
+operations; check that you are acting on the intended task.
 
-Help displays one shell-quoted attachment command to run from the project root.
-It prefers the foreground Pi's verified tmux session; outside tmux it uses a
-single associated owned session from cached observation. Ambiguous, changed or
-unknown targets are explained rather than guessed. Prefix hints use the target's
-effective `prefix` and `prefix2`; failed lookups retain generic `Prefix+s` guidance
-without claiming the default is configured. The monitor never attaches for you.
+### Check or start the project server
 
-### Tmux server and workspace
+A tmux server keeps terminals alive independently of the client viewing
+them. The project's server is normally reached through the socket file
+`.agents/run/tmux-socket` in the project directory.
 
-Server commands use effective `socketPath`, or `.agents/run/tmux-socket` under the
-current project root. They never fall back to inherited `TMUX`, a default server
-or another socket after failure. Output shows that target and identifies a
-different observer socket when applicable.
+Use **`/tmux-monitor tmux`** to check that server now. Unlike the task list,
+this makes a fresh connection check. It reports whether the server is
+reachable, absent or could not be inspected, without creating anything.
 
-`tmux`/`t` and `tmux status`/`t s` make a fresh, bounded check rather than reading
-cached workload rows. They list the server's session IDs and names, including
-sessions outside monitoring scope, and distinguish a reachable empty server,
-confirmed absence and inability to inspect. They create nothing, including
-directories. Missing tools, permissions, timeouts and incompatible output are
-inspection failures, not proof that a server is absent.
+Use **`/tmux-monitor tmux start`** when you want to start the project
+server and open a detached shell session for your current Pi conversation.
+Repeated calls reuse that session without replacing its work. The command
+prints a manual attachment command; it does not open a client or start a
+second Pi. The plain shell can appear as `:` in the indicator.
 
-`tmux start` explicitly ensures the server and one owner-specific workspace exist.
-It requires current Pi ownership/ancestry and resolved configuration. A new
-workspace is detached, starts an ordinary `/bin/sh` in the project directory
-using the server's environment, and receives session-local ownership. No Pi,
-runner, instrumented job or fake heartbeat is launched. Its spare shell can appear
-as `:` under normal scope rules.
+You do not need to run this before launching a task: the launch script
+creates the required session when needed. If startup times out, inspect
+the server before trying again—the server or shell session may already
+exist.
 
-Repeated and concurrent starts converge on the same workspace. Reuse requires
-matching ownership and ancestry; it does not add windows, replace panes, send
-keys or disturb work. A conflicting or unmarked session is never adopted.
-The result reports what became reachable, was created or reused and provides a
-verified, shell-quoted manual attach command. No automatic attachment occurs.
+### Commands
 
-Bootstrap creates missing socket-parent directories without broadening existing
-permissions. It never deletes socket paths, kills servers or changes execution
-environments to recover from errors. A partial failure or timeout may leave
-resources behind; inspect before retrying rather than duplicating creation.
-Loading, reloading, polling and read-only commands never bootstrap a server.
-Normal observer polling discovers a newly available project server.
+| Command | Shortcut | What it shows or does |
+| --- | --- | --- |
+| `/tmux-monitor` or `/tmux-monitor status` | `s` | List monitored panes and their states |
+| `/tmux-monitor help` | `h` | Commands, current symbols and terminal attachment help |
+| `/tmux-monitor config` | `c` | Show the settings currently in use |
+| `/tmux-monitor diagnostics` | `d` | Show connection details, launch settings and problems |
+| `/tmux-monitor tmux` or `/tmux-monitor tmux status` | `t`, `t s` | Check the project server now |
+| `/tmux-monitor tmux start` | `t start` | Start or reuse the project server and shell session |
 
-A shared socket does not move the server into the caller's container or establish
-that server-side Node/Pi/package paths are available. The helper's execution
-environment limits still apply.
+Shortcuts follow `/tmux-monitor`; for example, `/tmux-monitor h`.
+Only `tmux start` creates resources. These commands display notices in Pi;
+they do not make model requests or send their output to the agent.
 
-## Read the indicator
+### Optional: a width-aware footer
 
-| State | Default | Meaning |
-|---|---|---|
-| idle | `_` | Fresh Pi reporter; run settled |
-| active | `A` | Fresh Pi reporter says the workload is doing work |
-| running | `R` | Fresh runner confirms liveness; internal activity is unknown |
-| success | `+` | Command exited zero |
-| failed | `!` | Command failed, or Pi settled with a final error |
-| unknown | `?` | Registered work without trustworthy live state |
-| unregistered | `:` | Eligible pane without a recognized registration |
+[pi-footer-compositor](https://github.com/7h145/pi-footer-compositor) can
+place the indicator on the right side of Pi's footer and tell it how much
+space is available. Load that extension separately if you want the
+indicator to fit alongside your other footer information.
 
-Workload kinds (`batch`, `service`, `interactive`) describe launch intent, not
-activity. Fresh Pi reporting supplies idle, active or final-error state for any
-kind. A successfully settled Pi is idle while it remains alive, including a batch
-before wrapper exit; it is not proof of task completion. Without trustworthy
-application state, fresh runner liveness yields running for any kind. Pane
-presence alone proves none of these states. Manual compaction is active while
-running.
+With the compositor, you normally see one symbol per pane. When space is
+tight, the monitor switches to counts, then to a shorter summary of the
+states needing attention. Other footer items can take priority and leave
+no room for it.
 
-Recoverable errors/retries do not immediately mean failure. A final Pi error
-persists through heartbeats until the next run. If application reporting goes
-stale or disappears, discard its state: a fresh runner can still establish
-running; otherwise registered work becomes unknown. Loss of previously confirmed
-application reporting appears in diagnostics. A known command exit takes
-precedence over application state.
+Without the compositor, the monitor still publishes a count summary on
+Pi's extension-status line. This fallback does not know the available
+width and may be clipped. A custom footer may also keep the fallback
+rather than support the width-aware display.
 
-Each live source starts unconfirmed until its sequence advances, independently
-of other sources. Without other trustworthy evidence, display **unknown**. With
-defaults, confirmation can take one 5-second heartbeat plus a 2-second scan.
-Sources become stale after 15 seconds without advancement. The existing poll
-timer checks cached evidence even while an inventory scan is pending, including
-during initial observation. Changed states update both the dynamic footer and
-static fallback without extra tmux queries or overlapping scans. Records are
-timed when received, so completing a slow scan does not extend their freshness.
+## Reading the indicator
 
-The same `staleAfterMs` controls the status scan-age notice, but its clock is
-independent of heartbeat progress. Successful scans, including unchanged or empty
-inventories, renew scan age; failures, pending scans and viewing the cache do not.
-Changing the inventory namespace clears its scan age.
+| Symbol | State | What it means |
+| --- | --- | --- |
+| `_` | Idle | Pi has finished its current run and is still open |
+| `A` | Active | Pi reports that it is doing work, including manual compaction |
+| `R` | Running | The command is alive; its internal activity is not known |
+| `+` | Success | The command exited with status zero |
+| `!` | Failed | The command failed, or Pi finished a run with an error |
+| `?` | Unknown | A monitored task has no trustworthy current activity report |
+| `:` | Unregistered | The pane is included, but has no recognized task report |
 
-Command outcomes do not expire while the pane remains and no reuse is known.
-On disconnection, eligible
-cached slots remain: live states are unknown, known outcomes remain, and
-`/tmux-monitor diagnostics` reports degraded observation. Cached slots do not prove that panes
-still exist. A replacement server starts a new inventory namespace.
+Symbols follow pane creation order, not the order in which tasks became
+active. In a count summary, `A3 _5 R+?` means three active, five idle, one
+running, one successful and one unknown. An ending `…` means some states
+could not fit. Custom themes can change the symbols; help always shows
+the mapping currently in use.
 
-## Launch ordinary commands directly
+A command being alive is not the same as a Pi being active. A service may
+show `R` even when it has no requests to handle. Likewise, `_` and `+` do
+not mean a delegated task's answer is correct or a service is ready to use.
 
-No boxed-tmux skill is required. The stable entry is the package-relative
-`scripts/pi-tmux-monitor.mjs`; an npm bin of the same name is optional convenience.
-Use `/tmux-monitor diagnostics` in the launching Pi to obtain its current **session ID**,
-ancestry, helper path, socket and runner timing values. A session ID is not a PID,
-hostname or tmux session name.
+Reports are checked periodically. With the default settings, a new task
+can take about seven seconds to be confirmed; `?` during that time is
+normal. If Pi's activity reports stop, a fresh command report can still
+show `R`; without either, the task becomes `?`. Reports that have not
+advanced for 15 seconds are no longer trusted. If the connection is lost,
+cached tasks remain visible: live activity becomes unknown, while known
+command exits remain. The status view warns when its last successful scan
+is old.
 
-```bash
-HELPER=/absolute/path/to/pi-tmux-monitor/scripts/pi-tmux-monitor.mjs
-SOCKET="$PWD/.agents/run/tmux-socket"
-mkdir -p "$(dirname "$SOCKET")"
+## Starting tasks from a shell
 
-# Replace OWNER and ANCESTORS with the current diagnostic/launch-context values.
-OWNER='CURRENT_PI_SESSION_ID'
-ANCESTORS='[]'
-node "$HELPER" launch \
-  --socket "$SOCKET" --session agent-work --window tests \
-  --owner "$OWNER" --ancestors-json "$ANCESTORS" \
-  --kind batch --label tests --cwd "$PWD" \
-  --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- npm test
+You do not have to ask Pi to launch every command. The package includes
+`scripts/pi-tmux-monitor.mjs`, a Node script that starts a program in tmux
+and records its running and exit status. This is the **launch script**;
+monitoring the footer and starting a program are separate operations.
+
+To find the script in the installation Pi actually loaded, run
+**`/tmux-monitor diagnostics`**. Its `helper` field is the full filename,
+not a directory. For example, if that field contains
+`/opt/pi-packages/pi-tmux-monitor/scripts/pi-tmux-monitor.mjs`, you can run:
+
+```sh
+node /opt/pi-packages/pi-tmux-monitor/scripts/pi-tmux-monitor.mjs --help
 ```
 
-`launch` supports `batch`, `service` and `interactive` commands. Without an
-application reporter, fresh runner evidence yields running, not idle or active.
-A new session gets ownership context; an existing shared session is never stamped or reassigned.
-The helper creates a new window, never kills an existing one, and keeps an
-inspectable Bash shell after the command exits. Window and session names use
-letters, digits, `.`, `_`, `-` (up to 128 characters). Labels are explicit, optional,
-at most 128 characters and cannot contain controls.
+Use your own reported path, not the example path. It works with personal
+and project-local installs; the package need not be inside your project.
 
-Launch returns JSON with `paneId`, `jobId` and `socket` after registration is
-confirmed. Its exit status describes **launching**, not the asynchronous command's
-result. The runner records the command's exit status (interrupts use `128 + signal`
-number); the retained shell exports `PI_TMUX_MONITOR_EXIT_CODE`. Inspect with:
+The [launching guide](docs/launching.md) walks through starting a command
+or another Pi session, explains the settings to copy from diagnostics,
+and describes the JSON response for scripts that need to find the new
+terminal. A second Pi still needs its normal model configuration and
+credentials. If you give it a task, it can make model requests just like
+any other Pi session.
 
-```bash
-tmux -S "$SOCKET" list-sessions
-tmux -S "$SOCKET" attach -t agent-work
-# Inside tmux: Prefix + s (default Prefix is Ctrl+b)
-```
+## Configuration
 
-Bootstrap/registration failures are visible. A failed confirmation can mean a
-pane was created and work is running: inspect it before retrying. The helper
-never automatically retries creation. Monitoring failure does not kill work.
+No configuration file is required. For personal settings, create
+`pi-tmux-monitor.json` in Pi's agent directory, normally `~/.pi/agent`.
+If `PI_CODING_AGENT_DIR` is set, use that directory instead.
 
-## Launch Pi
+Project settings belong in `.pi/pi-tmux-monitor.json` under the directory
+where Pi is working. They apply only after Pi trusts the project and
+override personal settings. The monitor does not create these files or
+search parent repositories. Run **`/reload`** after editing, then check
+**`/tmux-monitor config`** to see what was applied.
 
-```bash
-node "$HELPER" pi \
-  --socket "$SOCKET" --session agent-work --window review \
-  --owner "$OWNER" --ancestors-json "$ANCESTORS" \
-  --mode interactive --label review \
-  --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- \
-  --no-extensions --provider PROVIDER --model MODEL
-```
+### Which panes are shown?
 
-Use helper `--mode batch` for one-shot Pi; it adds `--print`. The helper injects
-`-e /absolute/package/path/pi-tmux-monitor.ts` before any existing Pi `--`
-delimiter. Explicit loading still works with `--no-extensions`. Other Pi flags,
-model/provider choices, prompts and argv stay intact. The observer renders only
-in TUI mode; the reporter also operates in print, JSON and RPC modes.
+By default, the monitor includes tasks belonging to your current Pi
+conversation and its child conversations. Tasks started through the
+launch script carry that association. Unrelated terminals are not included
+just because their names look familiar or they run on the same machine.
+The pane containing the foreground Pi is excluded.
 
-Missing reporter paths are errors, not silent fallback. If intentionally launching
-without Pi instrumentation, add helper `--uninstrumented` before the helper's
-`--`. Command lifecycle registration still applies, but interactive internal state
-is unavailable. This does not disable other extensions selected by your Pi flags.
-
-### Context and server environment
-
-Owner precedence: explicit `--owner`, current shell-tool `PI_SESSION_ID`, then
-extension `PI_TMUX_MONITOR_OWNER`. Missing owner is an error. Direct/manual or
-custom-shell launches should pass **explicit** owner and ancestry: tmux's server
-environment or custom shell tools can retain stale Pi variables.
-
-`--ancestors-json` is the launching owner's root-to-parent array, **excluding the
-owner itself**. The helper appends that owner once. A child Pi's launch-context
-ancestry includes its parents; pass it unchanged when it launches grandchildren.
-Cycles, duplicates and contradictory chains are rejected. Lineage is bounded to
-64 IDs (including the appended owner) and 12 KiB of JSON. The extension supplies
-a bounded launch-context addendum before each run, without requesting another
-model turn or inspecting the user prompt. Environment exports are convenient,
-not assumed reliable for every shell tool.
-
-Absent explicit directory/timing values, the helper uses the calling directory,
-5,000 ms heartbeat and 1,000 ms tmux timeout. It does **not** read monitor JSON or
-bypass project trust. Pass the foreground extension's effective timings explicitly
-to propagate configuration overrides.
-
-Tmux launches in the **server host's environment**, not necessarily the requesting
-container's. Node (at the requesting helper's resolved executable path), Bash,
-package/runner/reporter files and Pi must be accessible there. Commands inherit
-the new pane's actual `TMUX`/`TMUX_PANE`, not stale client values. The runner passes
-explicit job/lineage context; a reporter accepts it only against a matching pane
-registration. Server replacement stops old reporters/wrappers from writing into a
-reused pane namespace.
-
-A socket grants access to the server's execution environment. An explicit socket
-may cross a container boundary. Shared socket access does not establish matching
-filesystems or process namespaces. The observer creates no server or host escape
-hatch, and does not use local process checks as server-side liveness evidence.
-
-## Scope and configuration
-
-Optional files, read on session start/reload:
-
-- Global: `getAgentDir()/pi-tmux-monitor.json` (Pi's public resolver; follows
-  `PI_CODING_AGENT_DIR`, otherwise `~/.pi/agent`).
-- Project: `ctx.cwd/.pi/pi-tmux-monitor.json`, **only if Pi trusts that project**.
-  No parent-repository search; no files created automatically. A custom monitor
-  JSON alone does not trigger Pi's trust prompt: use `/trust` or explicit approval.
-
-Precedence is defaults < global < trusted project. Objects merge recursively;
-arrays/scalars replace. Each invalid file layer is rejected as a whole, preserving
-lower valid layers and producing a bounded diagnostic. Unknown active themes
-fall back to default. Prototype-mutating keys are rejected.
-
-Socket choice: explicit `socketPath`; reachable project `.agents/run/tmux-socket`;
-current `$TMUX`; otherwise none. Automatic discovery retries, and a newly available
-project server supersedes inherited tmux. Once project/explicit selection is made,
-connection failures do not switch servers. Relative configured paths resolve
-against the file defining them. A reporter always uses its own actual tmux server,
-even if observation selects another one.
-
-| Setting | Default |
-|---|---|
-| `schemaVersion` | `1` |
-| `scope` | `descendants` |
-| `includeUnregistered` | `true` |
-| `socketPath` | `null` (automatic) |
-| `ownedSessions` | `[]` (literal names assigned to current owner) |
-| `pollIntervalMs` | `2000` |
-| `heartbeatIntervalMs` | `5000` |
-| `staleAfterMs` | `15000` |
-| `tmuxTimeoutMs` | `1000` |
-| `activeTheme` | `default` |
-
-Intervals are positive integers; stale threshold must cover at least three
-heartbeats. `children` selects direct ownership; `descendants` selects direct or
-immutable ancestor ownership; `server` selects all candidate panes on that server.
-The observer's own pane is excluded. A replacement Pi conversation does not adopt
-old workloads; server scope can still show them.
-
-Unregistered panes need independent ownership evidence: dedicated-session context,
-`ownedSessions`, or the exact legacy boxed-tmux name derived from this Pi's Linux
-PID/start time. An arbitrary `agent-` prefix is not evidence. Spare shells in an
-eligible session can legitimately appear as `:`. Registered pane ownership is
-authoritative in shared sessions. Linked-window aliases have one slot; numeric
-pane IDs determine creation order, not window order or recent activity.
-
-### Named themes
-
-The complete optional example, including **default and gaudy**, is in
-[`examples/pi-tmux-monitor.json`](examples/pi-tmux-monitor.json). Only default is
-built in; gaudy is a configuration example. Load that example as your optional
-file and select `"activeTheme": "gaudy"`, or define your own named theme.
-
-A trusted project can patch a global theme without copying it:
+To deliberately watch all other panes on the selected server, use:
 
 ```json
 {
   "schemaVersion": 1,
-  "activeTheme": "gaudy",
-  "themes": { "gaudy": { "states": { "active": { "fg": "warning" } } } }
+  "scope": "server"
 }
 ```
 
-Custom themes inherit the hardcoded default state mapping, then their merged
-patches. Default itself can be patched. Glyphs, including overflow, must be distinct
-single graphemes of one column, nonnumeric, nonwhitespace and free of controls.
-Foregrounds are Pi semantic foreground tokens or `null`, not arbitrary RGB/style
-syntax. Styles use Pi's current theme; dynamic formatting updates at render time,
-static fallback on the next poll.
+This also shows ordinary tmux panes as `:` when they have no task report.
+It does not add activity reporting to those programs.
+For finer control, use `scope: "children"`, `ownedSessions`, or
+`includeUnregistered: false`, explained in the
+[configuration reference](docs/configuration.md).
 
-## Architecture and adaptation
+### Choosing a server and appearance
 
-Extension-loaded source modules use `.mts` so Pi's TypeScript loader refreshes the
-whole module graph on `/reload`, including edited dependencies. Shared helper
-modules retain plain JavaScript syntax. The standalone Node helper uses a scoped
-load hook for this package's `.mts` files, so it needs no compiler or build step
-and also works when the package is installed beneath `node_modules`.
+Without `socketPath`, monitoring first looks for the project socket,
+then the server named by the current `TMUX` environment variable. If the
+project server becomes available later, monitoring switches to it.
+Project-server commands and launches default to the project socket even
+when monitoring is temporarily using another server.
 
-- `src/tmux.mts` handles bounded tmux operations and local-option discovery.
-- `src/protocol.mts` validates bounded versioned JSON metadata.
-- `src/observer.mts` selects one server, caches inventory, tracks scan age and
-  expires cached evidence on poll ticks independently of pending scans.
-- `src/reconcile.mts` applies ownership, generation and freshness policy.
-- `src/reporter.mts` observes this Pi's lifecycle; `src/runner.mjs` tracks a command.
-- `src/formatter.mts` is pure presentation; `src/footer.mts` adapts the compositor.
-- `src/commands.mts` separates command dispatch, cached snapshot collection and
-  human/JSON presentation; `src/tables.mts` renders literal table cells before
-  notification, with labelled fields at narrow widths.
-- `src/server.mts` supplies fresh server inspection and shared owned-session
-  creation for explicit workspace bootstrap and the helper.
-- `src/shell.mts` supplies shell quoting and verified attachment formatting.
-- `src/inspection.mts` supplies read-only help hints.
-- `src/version.mts` identifies this installation using its own manifest/Git data.
-- `pi-tmux-monitor.ts` wires public Pi lifecycle events and commands.
+You can set `socketPath` explicitly to choose a different server. Once a
+project or explicitly selected server is in use, connection failure does
+not cause a switch elsewhere. Diagnostics shows where new work will be
+launched (`socket`) and, if different, where status is currently read
+(`observerSocket`).
 
-Identity lookup and themed command formatting adapt pi-oaistt code; see
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for attribution and licence.
+The built-in theme is `default`. The
+[example configuration](examples/pi-tmux-monitor.json) also defines a
+`gaudy` theme with alternative symbols. It is an example
+to copy or adapt, not a second built-in theme. See the
+[configuration reference](docs/configuration.md) for colors, symbols,
+refresh intervals and all defaults.
 
-Only runners write `@pi-tmux-monitor-job`; only this Pi reporter writes
-`@pi-tmux-monitor-pi`. Both are pane-local atomic JSON, maximum 16 KiB. Session
-ownership is explicitly session-local `@pi-tmux-monitor-owner`. Inherited options
-are never accepted as pane registrations. Records contain IDs, lineage, kind,
-state/phase, sequence and exit status, not prompts, argv, terminal output,
-credentials or task results. Socket users can forge them: this is evidence, not
-an authentication or correctness guarantee. Like ordinary process launches,
-command argv is passed to the server and can be visible to socket/process users;
-only the monitor status records omit it.
+## Privacy and limits
 
-### Replace the formatter
+The monitor does not read conversations, terminal output, task-result files
+or credentials, and it makes no model requests or telemetry uploads.
+Its tmux status records contain identifiers, labels, task kinds, activity,
+sequence numbers and exit status—not prompts or command arguments.
+Like ordinary process launches, arguments are still passed to tmux and
+can be visible to people with process or socket access.
 
-`format(orderedSlots, resolvedConfig, currentPiTheme, allocatedColumns)` returns
-`{ text, mode: 'strip' | 'summary' | 'partial' | 'hidden' }`. Slots expose `state`;
-other inventory fields are ignored. Config supplies effective theme, `summaryOrder`
-and `partialOrder` (each lists all seven states exactly once).
+Access to a tmux socket permits execution in the **server's environment**.
+Sharing a socket does not share Node, Pi or package installations. Required
+programs and files must be accessible there; a launch failure does not
+trigger package installation, path rewriting or a switch to another server.
+Do not expose a socket to people or environments you do not trust. Anyone
+with socket access can alter the status records, so the indicator is not
+proof of who ran a command or whether its result is correct.
 
-The strip exactly fitting its budget is retained. Otherwise count the **whole**
-set, omit zeros and omit `1` for singleton counts, combining singleton runs:
-`A3 _5 R+?`. If that cannot fit, retain the longest attention-first prefix of
-complete count tokens with one reserved omission column, e.g. `!2 A20…`. Stop at
-the first token that cannot fit; never split a number or skip to lower-priority
-categories. At one column the partial display is `…`; empty/zero-budget is hidden.
-All-idle sets and retained outcomes are not hidden just for being quiet.
+The monitor never stops work because it cannot observe it. Terminals
+started by the launch script remain available after their commands exit.
+If you reuse one manually, it cannot reliably track every shell command
+you type; an earlier success or failure can remain visible. A running
+indicator is not a health check, and monitoring cannot replace reading
+and evaluating the actual result.
 
-Output visible width must not exceed the allocated budget, measured with Pi TUI's
-`visibleWidth`, excluding ANSI SGR bytes. The renderer must be synchronous,
-single-line, side-effect-free and perform no I/O. Replace this function/modes
-without changing observation or state meanings. Preserve `fullSummary()` for the
-unbounded static fallback. Styling must use the theme argument, never cached ANSI.
+## Troubleshooting
 
-### Other launch solutions and boxed-tmux
+Start with **`/tmux-monitor diagnostics`** and **`/tmux-monitor help`**.
 
-Another tmux launcher can simply invoke this helper with its socket, session,
-window, current owner/ancestry and timings. It does not need either skill. For a
-custom wrapper, adopt the pane-local protocol and explicit job context from the
-source modules, allocate a new job ID for each launch, increment sequence on
-heartbeat/state change, and retain terminal outcomes. Do not recursively evaluate
-JSON as tmux formats or overwrite newer generations during cleanup.
+- **No tasks appear:** check the selected server and scope. Plain tmux
+  terminals are not automatically associated with your Pi conversation.
+  Launch monitored tasks or deliberately choose `scope: "server"`.
+- **No project server exists:** use `/tmux-monitor tmux start` if you want
+  a shell, or launch a task. Viewing status does not create a server.
+- **A task shows `?`:** allow time for its first reports. If it stays
+  unknown, check diagnostics for lost reporting or connection errors.
+- **The indicator is clipped or missing:** check the compositor setup and
+  available footer space. `/tmux-monitor` still lists the monitored panes
+  even when the footer cannot fit them.
+- **A launch failed or timed out:** inspect the selected socket and any
+  created terminals before retrying. The task may already be running.
+  Check executable and package paths where the server runs.
+- **Project settings do not apply:** confirm project trust or start Pi
+  with `--approve`, then `/reload`. This extension's JSON file alone
+  does not trigger Pi's trust prompt. Invalid settings are rejected with
+  a diagnostic rather than partly applied.
 
-The companion [`skills/pi-tmux-monitor/SKILL.md`](skills/pi-tmux-monitor/SKILL.md)
-gives helper-relative recipes. For boxed-tmux, keep its shared project socket,
-agent sessions, persistent output and result/done protocol, replacing only command
-launches with helper recipes. **Installed boxed-tmux copies are not modified by
-this package.** Exit zero is command success, not delegated-task correctness. If
-a task uses `result.md` followed by `done`, that protocol remains authoritative;
-the monitor neither reads nor creates those files.
+## Development
 
-## Limits and development
+See [development and architecture](docs/development.md) for the source
+layout, reporting rules, footer integration, formatter API and test setup.
+The [launching guide](docs/launching.md) also covers using the script from
+your own tools without loading the skill.
 
-Arbitrary shell/builtin reuse is not fully observable without cooperation. Managed
-launches clear prior-generation metadata; confirmed new self-reporting Pi and
-observable pane-process replacement invalidate old outcomes. Do not treat a
-retained result as proof that every later uninstrumented shell action was tracked.
-Very short live records may disappear before heartbeat confirmation. A running
-indicator is not a health check. Observer failures never stop workloads.
-
-No automatic model calls, conversation inspection, credentials collection or
-usage telemetry are implemented. Validation uses synthetic Pi events, isolated
-tmux sockets and Pi startup/help only, not provider calls or delegated-task results.
-Actual-compositor tests use its implementation and Pi's real FooterComponent;
-synthetic capability tests separately exercise failure/replacement cases.
-Regular/default and fullscreen/gaudy right-side TUI placement with mixed
-static/dynamic producers, theme changes, resizing, reload and shutdown have also
-been checked on the baseline.
-
-From a source checkout:
-
-```bash
-npm test
-npm pack --dry-run
-```
-
-Tests use host-provided Pi packages rather than duplicate runtime copies. Set
-`PI_MONITOR_HOST_ROOT` to the installed coding-agent package directory if it is not
-`/usr/local/lib/node_modules/@earendil-works/pi-coding-agent`. Set
-`PI_MONITOR_COMPOSITOR` to its actual `.ts` entry to run the real integration check;
-those tests skip when the source is absent locally. Set
-`PI_MONITOR_REQUIRE_COMPOSITOR=1` to fail instead of skipping. Runtime peers
-remain supplied by Pi. To type-check without installing duplicate runtime peers:
-
-```bash
-npm ci --legacy-peer-deps
-export PI_MONITOR_HOST_ROOT=/absolute/path/to/installed/pi-coding-agent
-node test/setup-peers.mjs
-npm run check
-```
-
-The setup script resolves TUI through the host package, including hoisted
-installations, and refuses to overwrite a different existing peer.
-
-[GitHub Actions](.github/workflows/ci.yml) runs on pushes, pull requests and manual
-requests on Ubuntu with Node 22.19.0 and 26.10.0. It installs tmux and one Pi 1.1.0
-test host from [`test/host/package-lock.json`](test/host/package-lock.json),
-links the development types to that host, checks out the pinned real compositor,
-runs `npm run check` and checks package contents. The private test-host manifest
-keeps Pi SDK dependencies on the same release; the lockfile fixes their complete
-installation. Missing compositor
-source fails CI instead of silently skipping integration tests. Tests use
-isolated tmux sockets and offline Pi startup; no provider credentials are needed.
-
-Broader compatibility and live provider-backed runs have not been validated.
+Tests use isolated tmux servers and offline Pi startup, not provider
+requests. Live provider-backed behavior and broader platform compatibility
+have not been validated. Adapted code and its license are documented in
+[third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,142 +1,101 @@
 ---
 name: pi-tmux-monitor
 description: >-
-  Register tmux commands and Pi subagents for truthful footer monitoring. Use when
-  launching batch work, services or interactive Pi in tmux, directly or alongside
-  boxed-tmux, and when adapting another tmux launcher to the monitor.
-compatibility: Requires Node 22.19+, tmux and Pi; validated on Linux with Pi 1.1.0 and tmux 3.5a.
+  Launch commands and Pi subagents with ownership and lifecycle reporting in tmux.
+  Use for monitored batch work, services or interactive Pi, interpreting footer
+  states, and locating their terminal output.
+compatibility: Node 22.19+, tmux and Bash; Pi for Pi workloads. Validated on Linux with Pi 1.1.0 and tmux 3.5a.
 ---
 
 # Monitored tmux launches
 
-The helper is `../../scripts/pi-tmux-monitor.mjs` relative to this skill directory.
-Resolve that to an absolute path. Do not assume a globally installed executable.
-The package extension is `../../pi-tmux-monitor.ts`. The skill is guidance, not
-launch enforcement; observation/reporting never spawns work. Explicit
-`/tmux-monitor tmux start` may create an owned, detached shell workspace.
+Resolve `../../scripts/pi-tmux-monitor.mjs` relative to this skill directory.
+Use the actual installed package, whether global or project-local; do not assume
+an executable is globally on PATH. The software also works without this skill.
 
-## Obtain current launch context
+## Current context
 
-Use the extension's launch-context addendum or ask the user to run `/tmux-monitor diagnostics`.
-Obtain **current** owner session ID, ancestry, socket, helper path and runner timing
-values. Do not invent an owner from a PID or reuse another conversation's ID.
-Pass these explicitly when custom shell tools do not inherit fresh Pi context.
-`PI_SESSION_ID` or `PI_TMUX_MONITOR_OWNER` may be useful only when freshness is known.
-Tmux server environment can retain old IDs.
+Use the current launch-context addendum or `/tmux-monitor diagnostics` for owner,
+ancestry, helper, resolved launch socket and effective runner timings. The
+observer may use a different socket; do not substitute it for the launch target.
+The target path does not imply that a server exists. Pass explicit fresh values
+in custom shell tools; server environment variables may be stale.
 
-The ancestry JSON is the launching owner's root-to-parent array, excluding that
-owner. For a background Pi launching its children, pass its current diagnostic
-ancestry unchanged; the helper appends its owner once. Cycles/duplicates fail.
-Do not copy the launching process's `TMUX`/`TMUX_PANE` into a new pane.
+An owner is the current Pi session ID, not a PID or tmux name. Ancestry excludes
+that owner; pass it unchanged when a child Pi launches its children. The helper
+appends the owner once and rejects duplicate/cyclic chains. Do not copy client
+`TMUX`/`TMUX_PANE` into new panes.
 
-Select one socket, normally `$PWD/.agents/run/tmux-socket`. The helper can start a
-new dedicated session or create a window in an existing session. Create the socket's
-parent directory if needed. The observer alone never starts a server.
+## Launch
 
-Use `/tmux-monitor tmux` (`t`, `tmux status`, `tmux s`, `t status`, `t s`) for a
-fresh read-only server check. It lists all server sessions and creates no resources.
-Use `/tmux-monitor tmux start` (`t start`) only on explicit user intent to ensure
-an attachable workspace; `start` has no abbreviation. These commands select the
-configured socket or project `.agents/run/tmux-socket`, not inherited/default
-servers, and show when observation uses a different socket. Bootstrap needs current
-Pi owner/ancestry, preserves existing work and refuses ownership conflicts.
-It launches only an unregistered shell, not a Pi or job. Run its verified attach
-command manually if desired. No shutdown command or automatic bootstrap is provided.
-
-## Ordinary command recipe
-
-Replace the variables with resolved/current values. Timings below illustrate the
-defaults; use the extension's effective values when configuration overrides them.
+Substitute current values. Defaults below illustrate timings; use the effective
+values from context. Arguments after `--` are literal argv; invoke an explicit
+shell for shell syntax.
 
 ```bash
-HELPER=/absolute/package/path/scripts/pi-tmux-monitor.mjs
-SOCKET=/absolute/project/path/.agents/run/tmux-socket
-OWNER=CURRENT_PI_SESSION_ID
-ANCESTORS='[]'
-mkdir -p "$(dirname "$SOCKET")"
-node "$HELPER" launch \
-  --socket "$SOCKET" --session agent-name --window tests \
-  --owner "$OWNER" --ancestors-json "$ANCESTORS" \
-  --cwd "$PWD" --kind batch --label tests \
+node /absolute/installed/package/scripts/pi-tmux-monitor.mjs launch \
+  --socket /absolute/project/.agents/run/tmux-socket \
+  --owner CURRENT_PI_SESSION_ID --ancestors-json '[]' \
+  --window tests --cwd /absolute/project --kind batch --label tests \
   --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- npm test
 ```
 
-Use `--kind service` for dev servers/watchers. Without an application reporter,
-fresh runner liveness yields running for any kind, not idle or active. Pane
-presence alone is not liveness evidence.
-Arguments after `--` are literal command argv. For shell syntax, use an explicit
-shell, for example `-- bash -lc 'npm test && npm run build'`; do not flatten arbitrary
-argv into unquoted shell text.
-
-## Pi recipe
+Omit `--session` to use the owner's default session, creating it with the first
+workload and no spare shell. `--session NAME` explicitly selects a dedicated or
+shared session; existing shared ownership is never reassigned. Use `--kind service`
+for dev servers/watchers, or `interactive` for ordinary interactive programs.
 
 ```bash
-node "$HELPER" pi \
-  --socket "$SOCKET" --session agent-name --window review \
-  --owner "$OWNER" --ancestors-json "$ANCESTORS" \
-  --cwd "$PWD" --mode interactive --label review \
+node /absolute/installed/package/scripts/pi-tmux-monitor.mjs pi \
+  --socket /absolute/project/.agents/run/tmux-socket \
+  --owner CURRENT_PI_SESSION_ID --ancestors-json '[]' \
+  --window review --cwd /absolute/project --mode interactive \
   --heartbeat-interval-ms 5000 --tmux-timeout-ms 1000 -- \
   --no-extensions --provider PROVIDER --model MODEL
 ```
 
-Keep the user's flags, prompt, model choice and exit intent. Use helper
-`--mode batch` for one-shot work. The helper resolves and explicitly loads this
-package's reporter even with `--no-extensions`, and injects options before a Pi
-`--` delimiter. It does not choose a model or make a model call by itself. Missing
-reporter paths are errors. Use `--uninstrumented` only when that loss is explicitly
-intended; command lifecycle remains registered where possible.
+Preserve the user's flags, literal prompt, model/provider and exit intent. Batch
+mode adds `--print`. The helper loads its resolved reporter explicitly even with
+`--no-extensions`, before a Pi `--` delimiter. `--uninstrumented` is an explicit
+loss of Pi reporting, not automatic recovery; command lifecycle still applies.
 
-## Inspect and interpret
+## Inspection and startup results
+
+The public helper also provides `inspect --socket PATH --cwd DIR` (read-only)
+and `start --socket PATH --cwd DIR --owner ID --ancestors-json JSON` (explicit
+shell workspace). Start and default launches share session selection. Neither
+inspection nor loading/polling creates resources. A start creates only an
+unregistered shell, not a Pi, job or fake heartbeat.
+
+Each operation returns JSON. See [the launch script response reference](../../docs/launching.md#response-fields)
+for states, verified identities and partial failures. Retain socket, serverIdentity,
+session, windowId, paneId, panePid and jobId where provided. `observed` IDs in an
+unavailable result are not verified targets. Failed confirmation may leave running
+work: inspect before retrying, never duplicate automatically. Launch acknowledgement
+is not application readiness or task correctness. Output remains in a retained shell.
+
+Recheck the server identity with public `inspect`, and compare the intended
+session/window/pane/PID before using a saved target. Then capture output using the
+returned socket and verified pane, not a guessed name:
 
 ```bash
-tmux -S "$SOCKET" list-sessions
-tmux -S "$SOCKET" attach -t agent-name
-# Inside tmux: use the prefix shown by /tmux-monitor help, then s
+tmux -S /absolute/returned/socket capture-pane -t '%VERIFIED_PANE_NUMBER' -p -S -80
 ```
 
-The helper returns the created pane/job identity, not the asynchronous command
-result. A retained shell/window preserves output and status; interrupts/failures
-become command outcomes. If launch confirmation fails, inspect before retrying:
-work may already be running. Never automatically duplicate a failed launch.
+Use `/tmux-monitor help` for a verified manual attach hint and effective prefix,
+then Prefix+s for native inspection. Native input, interrupts and deliberate
+cleanup remain possible separately; verify targets first. The observer is read-only.
+
+## Interpret states
 
 `_` idle, `A` active, `R` running, `+` command success, `!` failure, `?` unknown,
-`:` eligible unregistered pane. Kinds describe intent, not activity. Fresh Pi
-reporting supplies idle/active/final-error state for any kind; even a batch Pi is
-idle after settlement and before command exit. Fresh runner liveness alone means
-running. A known command exit takes precedence. Each live source needs heartbeat
-advancement before it is trusted. Stale or missing application reporting falls
-back to running only with fresh runner evidence; otherwise registered work is
-unknown. Loss of previously confirmed reporting appears in diagnostics. Idle is
-not task completion, and unregistered panes do not become running from existence.
+`:` eligible unregistered pane. Themes may change glyphs; help shows active values.
+Fresh application reporting supplies idle/active/final-error state for any kind.
+Fresh runner liveness alone means running; missing trustworthy evidence means
+unknown. Known exits take precedence. Idle is not task completion, and pane existence does
+not establish running or idle. Loss of confirmed reporting appears in diagnostics.
 
-The monitor appears in the compositor's right-hand group, before higher-order statuses when space permits;
-those statuses can reduce or omit it on narrow terminals. Without an active
-width-aware capability, only a static count summary under the same right-side key
-is provided; clipping may occur. Without the compositor, that summary stays on
-Pi's ordinary extension-status line. Use `/tmux-monitor diagnostics` for capability, status-key
-and degraded diagnostics.
-
-Use bare `/tmux-monitor` or `status` (`s`) for all cached pane rows. `help` (`h`)
-shows the active glyph legend and a verified, manually run attachment command;
-`config` (`c`) shows effective settings. Commands do not force a scan or control
-existing work. Only explicit `tmux start` creates resources. Help does not guess
-between multiple owned sessions.
-
-## Adapt boxed-tmux or another launcher
-
-Keep boxed-tmux's shared socket, per-agent sessions, persistent terminal output,
-private task directories and its `result.md` then `done` completion protocol.
-Replace its new-window/send-keys command launch with the helper invocation, using
-the same socket/session and a fresh window name. Do not kill an existing window
-merely to reuse its name. Keep its normal inspection and explicit cleanup steps.
-The helper never writes completion sentinels or reads task results; zero exit alone
-is not delegated-task correctness.
-
-Another launcher can use the same recipes without either skill. Full custom
-protocol adaptation is described in `../../README.md` and `../../src/protocol.mts`.
-Do not modify installed skills or another product unless separately authorized.
-
-Commands execute where the tmux server runs. Shared socket access is not proof
-that Node, Bash, Pi or package paths exist there. Explicit cross-container socket
-selection grants access to that server's execution environment; obtain the user's
-intended scope rather than creating a host escape hatch.
+Commands execute in the tmux server's environment. The cwd, Node/Bash, helper files
+and requested executable must be usable there; Pi reporting additionally needs Pi
+and the reporter. A reachable socket or caller installation proves none of this.
+Do not provision tools, rewrite paths or switch execution environments after failure.

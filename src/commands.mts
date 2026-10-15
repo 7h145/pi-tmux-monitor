@@ -112,7 +112,7 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
   return [
     `${strong(ctx, `${installationLabel(data.identity)}:`)} tmux workload awareness.`,
     "",
-    "Inspect workload states and the tmux server; bootstrap a workspace explicitly.",
+    "Inspect workload states and the project server; start it explicitly.",
     "",
     strong(ctx, "Commands:"),
     strong(ctx, "Workload inspection:"),
@@ -130,10 +130,7 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
     strong(ctx, "Tmux server:"),
     command("/tmux-monitor tmux (t)", "Check the project server (read-only)"),
     command("/tmux-monitor tmux status (s)", "Same server check; tmux s / t s"),
-    command(
-      "/tmux-monitor tmux start",
-      "Start/reuse the project server",
-    ),
+    command("/tmux-monitor tmux start", "Start/reuse the project server"),
     "  Also: t start. Start is the only mutating command; no shorthand.",
     "",
     strong(
@@ -172,7 +169,7 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
 
 export function serverText(ctx, data, result, start, width = noticeWidth()) {
   const lines = [
-    `${strong(ctx, `${installationLabel(data.identity)}:`)} ${start ? "Tmux workspace bootstrap" : "Tmux server status"}.`,
+    `${strong(ctx, `${installationLabel(data.identity)}:`)} ${start ? "Tmux project server startup" : "Tmux server status"}.`,
   ];
   if (result.socket) lines.push(`Target socket: ${literalCell(result.socket)}`);
   if (result.observerSocket)

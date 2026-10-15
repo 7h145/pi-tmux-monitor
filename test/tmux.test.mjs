@@ -229,7 +229,14 @@ test("server replacement changes identity and stale inherited server PID is reje
   }));
 test("missing executable becomes terminal failure, not a disappearing window", async () =>
   server(async ({ socket, tmux }) => {
-    const result = await launch(cli(socket, ["/definitely-missing-command"]));
+    let result;
+    await assert.rejects(
+      launch(cli(socket, ["/definitely-missing-command"])),
+      (error) => {
+        result = error.result;
+        return result.partial && /Server-side/.test(error.message);
+      },
+    );
     const final = await until(async () => {
       const r = await tmux.record("job", result.paneId);
       return r?.phase === "failed" ? r : null;
@@ -361,7 +368,10 @@ test("missing packaged reporter fails before launch; explicit uninstrumented Pi 
           "--offline",
           "--help",
         ]),
-      /ENOENT/,
+      (error) => {
+        const result = JSON.parse(error.stdout);
+        return result.state === "unavailable" && result.partial === false;
+      },
     );
     assert.equal(
       (await tmux.call("list-windows", "-t", "shared")).split("\n").length,
@@ -619,4 +629,134 @@ test("helper shares atomic ownership creation for dotted names from a live foreg
           ? delete process.env[key]
           : (process.env[key] = value);
     }
+  }));
+
+for (const type of ["job", "pi"]) {
+  const option = type === "job" ? JOB : PI;
+  const record = type === "job" ? job : reporter;
+  const key = type === "job" ? "jobId" : "instanceId";
+  test(`absent ${type} write cannot overwrite a newer local generation`, () =>
+    server(async ({ tmux }) => {
+      const guard = {
+        serverIdentity: await tmux.identity(),
+        allowAbsent: true,
+      };
+      assert.equal(await tmux.record(type, "%0"), null);
+      const newer = record({ paneId: "%0", [key]: "newer" });
+      await tmux.write(type, "%0", newer);
+      await tmux.write(type, "%0", record({ paneId: "%0" }), guard);
+      assert.deepEqual(await tmux.record(type, "%0"), newer);
+    }));
+
+  test(`absent ${type} write tests pane-local presence, not inherited options`, () =>
+    server(async ({ tmux }) => {
+      const serverIdentity = await tmux.identity();
+      for (const scope of [
+        ["-t", "shared"],
+        ["-w", "-t", "shared:0"],
+        ["-s"],
+      ]) {
+        const inherited = record({ paneId: "%0", [key]: "inherited" });
+        await tmux.call(
+          "set-option",
+          ...scope,
+          option,
+          JSON.stringify(inherited),
+        );
+        assert.equal(await tmux.record(type, "%0"), null);
+        const own = record({ paneId: "%0", [key]: "local" });
+        await tmux.write(type, "%0", own, {
+          serverIdentity,
+          allowAbsent: true,
+        });
+        assert.deepEqual(await tmux.record(type, "%0"), own);
+        const newer = record({ paneId: "%0", [key]: "newer" });
+        await tmux.write(type, "%0", newer);
+        await tmux.write(type, "%0", own, {
+          serverIdentity,
+          allowAbsent: true,
+        });
+        assert.deepEqual(await tmux.record(type, "%0"), newer);
+        await tmux.call("set-option", "-p", "-u", "-t", "%0", option);
+        await tmux.call("set-option", ...scope, "-u", option);
+      }
+      await tmux.write(type, "%0", record({ paneId: "%0" }), {
+        serverIdentity: serverIdentity.replace(/:\d+:\d+$/, ":0:0"),
+        allowAbsent: true,
+      });
+      assert.equal(await tmux.record(type, "%0"), null);
+    }));
+}
+
+test("reporter preserves a newer Pi inserted after its absence read", () =>
+  server(async ({ socket, tmux }) => {
+    const { Reporter } = await import("../src/reporter.mts");
+    const pid = await tmux.call("display-message", "-p", "#{pid}");
+    const newer = reporter({ paneId: "%0", instanceId: "newer" });
+    const adapter = Object.create(tmux);
+    let reads = 0;
+    adapter.record = async (type, ...args) => {
+      const result = await tmux.record(type, ...args);
+      if (type === "pi" && ++reads === 2) {
+        assert.equal(result, null);
+        await tmux.write("pi", "%0", newer);
+      }
+      return result;
+    };
+    const r = new Reporter({
+      sessionId: "older",
+      mode: "tui",
+      idle: true,
+      config: { ...DEFAULTS, heartbeatIntervalMs: 100000 },
+      env: { TMUX: `${socket},${pid},0`, TMUX_PANE: "%0" },
+      tmuxFactory: () => adapter,
+    });
+    try {
+      await r.start();
+      assert.equal(reads, 2);
+      assert.deepEqual(await tmux.record("pi", "%0"), newer);
+      await r.active();
+      assert.equal(r.retired, true);
+    } finally {
+      await r.stop("quit");
+    }
+    assert.deepEqual(await tmux.record("pi", "%0"), newer);
+  }));
+
+test("runner preserves a newer job inserted after its absence read", () =>
+  server(async ({ socket, dir, tmux }) => {
+    const { run } = await import("../src/runner.mjs");
+    const pid = await tmux.call("display-message", "-p", "#{pid}");
+    const newer = job({ paneId: "%0", jobId: "newer" });
+    const original = Tmux.prototype.record;
+    let reads = 0;
+    Tmux.prototype.record = async function (type, ...args) {
+      const result = await original.call(this, type, ...args);
+      if (this.socket === socket && type === "job" && ++reads === 2) {
+        assert.equal(result, null);
+        await tmux.write("job", "%0", newer);
+      }
+      return result;
+    };
+    try {
+      const code = await run(
+        {
+          jobId: "older",
+          owner: "owner",
+          ancestors: ["owner"],
+          kind: "batch",
+          runtime: "command",
+          timeout: 1000,
+          heartbeat: 100000,
+          cwd: dir,
+          argv: [process.execPath, "-e", "process.exit(0)"],
+        },
+        { ...process.env, TMUX: `${socket},${pid},0`, TMUX_PANE: "%0" },
+      );
+      assert.equal(code, 0);
+      assert.ok(reads >= 2);
+    } finally {
+      Tmux.prototype.record = original;
+    }
+    assert.deepEqual(await tmux.record("job", "%0"), newer);
   }));

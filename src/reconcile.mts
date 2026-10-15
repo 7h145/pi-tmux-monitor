@@ -72,10 +72,17 @@ export class Reconciler {
       if (g.pid !== p.pid) {
         if (j) g.invalidJobs.add(j.jobId);
         g.pid = p.pid;
+        g.piWorkload = null;
       }
-      // An unattached fresh Pi is evidence of cooperative pane reuse, not a
-      // leftover reporter for an older helper job. Never revive invalid outcomes.
-      if (rf && r.jobId === null && j) g.invalidJobs.add(j.jobId);
+      // Confirm cooperative reuse without letting an unrelated Pi displace a
+      // live job. Once invalidated, a job cannot regain state or ownership.
+      if (
+        rf &&
+        r.jobId === null &&
+        j &&
+        (["success", "failed"].includes(j.phase) || !jf)
+      )
+        g.invalidJobs.add(j.jobId);
       this.generations.set(p.paneId, g);
       const compatible = matches(j, r),
         validJob = j && !g.invalidJobs.has(j.jobId);
@@ -84,10 +91,18 @@ export class Reconciler {
         (validJob ? compatible : !j || r.jobId === null) &&
         ["idle", "active", "failed"].includes(r.state);
       const ended = validJob && ["success", "failed"].includes(j.phase);
+      // Retain confirmed generation ownership after reporter loss. Its live
+      // state still expires, but neither the invalid job nor session fallback
+      // may reclaim the pane while this generation remains current.
+      if (validJob) g.piWorkload = null;
+      else if (rf && (!j || r.jobId === null)) g.piWorkload = r;
+      const workload = validJob
+        ? j
+        : (g.piWorkload ?? (r && (!j || r.jobId === null) ? r : null));
       const generation = validJob
         ? "job:" + j.jobId
-        : r && (!j || r.jobId === null)
-          ? "pi:" + r.processInstanceId + ":" + r.sessionId
+        : workload
+          ? "pi:" + workload.processInstanceId + ":" + workload.sessionId
           : null;
       // Confirm reporting before expecting it, so generic and intentionally
       // uninstrumented commands do not produce missing-reporter diagnostics.
@@ -110,12 +125,11 @@ export class Reconciler {
       else if (ended) state = j.phase;
       else if (applicationState) state = r.state;
       else if (validJob && jf && j.phase === "running") state = "running";
-      const workload = validJob ? j : r && (!j || r.jobId === null) ? r : null;
       return { ...p, state, workload };
     });
   }
 }
-export function eligible(p, owner, config, ownPane, legacySession = null) {
+export function eligible(p, owner, config, ownPane) {
   if (p.paneId === ownPane) return false;
   if (!config.includeUnregistered && !p.job && !p.pi) return false;
   if (config.scope === "server") return true;
@@ -123,12 +137,14 @@ export function eligible(p, owner, config, ownPane, legacySession = null) {
     direct === owner ||
     (config.scope === "descendants" && ancestors.includes(owner));
   // Registered ownership is authoritative, even in a differently owned session.
-  if (p.job) return inScope(p.job.ownerSessionId, p.job.ancestors);
-  if (p.pi?.parentSessionId)
-    return inScope(p.pi.parentSessionId, p.pi.ancestors);
+  const workload = "workload" in p ? p.workload : (p.job ?? p.pi);
+  if (workload?.ownerSessionId)
+    return inScope(workload.ownerSessionId, workload.ancestors);
+  if (workload?.parentSessionId)
+    return inScope(workload.parentSessionId, workload.ancestors);
   return p.sessions.some((s) =>
     s.owner
       ? inScope(s.owner.ownerSessionId, s.owner.ancestors)
-      : config.ownedSessions.includes(s.name) || s.name === legacySession,
+      : config.ownedSessions.includes(s.name),
   );
 }

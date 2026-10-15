@@ -125,7 +125,7 @@ export async function createOwnedSession(
   if (!match) throw Error("Session creation returned no verified identity");
   return { sessionId: match[1], paneId: match[2] };
 }
-async function verifyWorkspace(tmux, inspection, session, owner, live) {
+export async function verifyWorkspace(tmux, inspection, session, owner, live) {
   checkLive(live);
   if ((await tmux.identity()) !== inspection.identity)
     throw Error("Tmux server changed during bootstrap");
@@ -191,7 +191,8 @@ export async function serverCommand(
   }
   const tmux = factory(socket, current.config.tmuxTimeoutMs);
   const before = await inspectServer(tmux);
-  if (!start || before.state === "unavailable") return { ...base, ...before };
+  if (!start || before.state === "unavailable")
+    return { ...base, ...before, serverIdentity: before.identity ?? null };
   let created = false,
     attempted = false,
     session,
@@ -256,11 +257,34 @@ export async function serverCommand(
     await verifyWorkspace(tmux, after, session, owner, live);
     const attach = attachmentCommand(await realpath(socket), cwd, session.id);
     checkLive(live);
+    const paneId =
+      createdPane ??
+      (
+        await tmux.call(
+          "-N",
+          "list-panes",
+          "-t",
+          session.id,
+          "-F",
+          "#{pane_id}",
+        )
+      ).split("\n")[0];
+    checkLive(live);
+    const target = await verifyTarget(
+      tmux,
+      after.identity,
+      paneId,
+      session.id,
+      live,
+    );
+    checkLive(live);
     return {
       ...base,
+      ...target,
       state: "ready",
       server: before.state === "absent" ? "became reachable" : "reused",
       workspace: created ? "created" : "reused",
+      windowAction: created ? "created" : "reused",
       session,
       attach,
     };
@@ -274,4 +298,57 @@ export async function serverCommand(
       session,
     };
   }
+}
+
+// A target is verified only inside a stable server namespace. Pane PID helps
+// controllers reject replaced targets before later input or cleanup.
+export async function verifyTarget(
+  tmux,
+  serverIdentity,
+  paneId,
+  sessionId,
+  live = () => true,
+) {
+  checkLive(live);
+  if ((await tmux.identity()) !== serverIdentity)
+    throw Error("Tmux server changed during target verification");
+  checkLive(live);
+  if (!/^%\d+$/.test(paneId ?? "")) throw Error("Pane identity is unavailable");
+  const raw = await tmux.call(
+    "-N",
+    "display-message",
+    "-p",
+    "-t",
+    paneId,
+    "#{session_id}|#{window_id}|#{pane_id}|#{pane_pid}",
+  );
+  checkLive(live);
+  const [sid, windowId, actualPane, panePid] = raw.split("|");
+  if (
+    !/^\$\d+$/.test(sid ?? "") ||
+    !/^@\d+$/.test(windowId ?? "") ||
+    actualPane !== paneId ||
+    !/^\d+$/.test(panePid ?? "") ||
+    (sessionId && sid !== sessionId)
+  )
+    throw Error("Target identity changed");
+  const name = await tmux.call(
+    "-N",
+    "display-message",
+    "-p",
+    "-t",
+    paneId,
+    "#{session_name}",
+  );
+  checkLive(live);
+  if ((await tmux.identity()) !== serverIdentity)
+    throw Error("Tmux server changed during target verification");
+  checkLive(live);
+  return {
+    serverIdentity,
+    session: { id: sid, name },
+    windowId,
+    paneId,
+    panePid,
+  };
 }

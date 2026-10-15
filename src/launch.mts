@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { access } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { lineage } from "./protocol.mts";
 import { Tmux } from "./tmux.mts";
@@ -12,6 +12,9 @@ import {
   createOwnedSession,
   sessionOwner,
   sessionName,
+  workspaceName,
+  verifyWorkspace,
+  verifyTarget,
 } from "./server.mts";
 export const packageRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -43,8 +46,8 @@ export function piArgs(
 }
 export function parseCLI(argv, env = process.env, cwd = process.cwd()) {
   const [action, ...rest] = argv;
-  if (!["launch", "pi"].includes(action))
-    throw new Error("Expected launch or pi; see --help");
+  if (!["launch", "pi", "inspect", "start"].includes(action))
+    throw new Error("Expected inspect, start, launch or pi; see --help");
   const options = Object.create(null),
     known = [
       "socket",
@@ -60,9 +63,10 @@ export function parseCLI(argv, env = process.env, cwd = process.cwd()) {
       "tmux-timeout-ms",
     ];
   const delimiter = rest.indexOf("--");
-  if (delimiter < 0) throw new Error("Separate command arguments with --");
-  const flags = rest.slice(0, delimiter),
-    command = rest.slice(delimiter + 1);
+  if (delimiter < 0 && ["launch", "pi"].includes(action))
+    throw new Error("Separate command arguments with --");
+  const flags = delimiter < 0 ? rest : rest.slice(0, delimiter),
+    command = delimiter < 0 ? [] : rest.slice(delimiter + 1);
   for (let i = 0; i < flags.length; i++) {
     const key = flags[i].replace(/^--/, "");
     if (flags[i] === "--uninstrumented") {
@@ -79,21 +83,43 @@ export function parseCLI(argv, env = process.env, cwd = process.cwd()) {
     options[key] = flags[++i];
   }
   const owner = options.owner ?? env.PI_SESSION_ID ?? env.PI_TMUX_MONITOR_OWNER;
-  const ancestors = lineage(
-    owner,
-    JSON.parse(
-      options["ancestors-json"] ?? env.PI_TMUX_MONITOR_ANCESTORS ?? "[]",
-    ),
-  );
+  const ancestors =
+    action === "inspect"
+      ? []
+      : lineage(
+          owner,
+          JSON.parse(
+            options["ancestors-json"] ?? env.PI_TMUX_MONITOR_ANCESTORS ?? "[]",
+          ),
+        );
   const socket = resolve(
     cwd,
     options.socket ?? resolve(cwd, ".agents/run/tmux-socket"),
   );
   for (const key of ["session", "window"])
-    if (!/^[a-zA-Z0-9_.-]{1,128}$/.test(options[key] ?? ""))
+    if (
+      ((key === "window" && ["launch", "pi"].includes(action)) ||
+        options[key] !== undefined) &&
+      !/^[a-zA-Z0-9_.-]{1,128}$/.test(options[key] ?? "")
+    )
       throw new Error(
         `Required --${key} must be a literal name (letters, digits, . _ -)`,
       );
+  if (
+    ["inspect", "start"].includes(action) &&
+    (command.length ||
+      Object.keys(options).some(
+        (k) =>
+          ![
+            "socket",
+            "owner",
+            "ancestors-json",
+            "cwd",
+            "tmux-timeout-ms",
+          ].includes(k),
+      ))
+  )
+    throw Error("Unexpected setup argument");
   const kind =
     action === "pi"
       ? { interactive: "interactive", batch: "batch" }[
@@ -118,6 +144,7 @@ export function parseCLI(argv, env = process.env, cwd = process.cwd()) {
   )
     throw new Error("Invalid timing");
   return {
+    action,
     socket,
     session: options.session,
     window: options.window,
@@ -137,27 +164,77 @@ export function parseCLI(argv, env = process.env, cwd = process.cwd()) {
     uninstrumented: !!options.uninstrumented,
   };
 }
-export async function launch(plan) {
+export async function launch(plan, factory = (s, t) => new Tmux(s, t)) {
   if (plan.runtime === "pi" && !plan.uninstrumented) await access(reporterPath);
   await access(helperPath);
   await access(plan.cwd);
-  const tmux = new Tmux(plan.socket, plan.timeout);
-  // The envelope is command argv, not shared monitor metadata. Shell quoting
-  // keeps it inert; the server, not the requesting client, supplies TMUX/PANE.
-  const envelope = Buffer.from(JSON.stringify(plan)).toString("base64url");
-  const command =
-    [quote(process.execPath), quote(helperPath), "run", quote(envelope)].join(
-      " ",
-    ) +
-    `; code=$?; printf '\\nMonitored command exited %s\\n' "$code"; export PI_TMUX_MONITOR_EXIT_CODE="$code"; exec bash -i`;
-  const server = await inspectServer(tmux);
-  if (server.state === "unavailable") throw Error(server.reason);
-  const existing = server.sessions.find(
-    (s) => s.name === sessionName(plan.session),
-  );
-  await socketDirectory(plan.socket);
-  const pane = existing
-    ? await tmux.call(
+  const tmux = factory(plan.socket, plan.timeout);
+  let before,
+    session,
+    pane,
+    target,
+    attempted = false,
+    created = false,
+    ackDir;
+  try {
+    before = await inspectServer(tmux);
+    if (before.state === "unavailable") throw Error(before.reason);
+    const name = plan.session ?? workspaceName(plan.owner);
+    const owner = sessionOwner(plan.owner, plan.ancestors.slice(0, -1));
+    session = before.sessions.find((s) => s.name === sessionName(name));
+    if (session && !plan.session)
+      await verifyWorkspace(tmux, before, session, owner, () => true);
+    await socketDirectory(plan.socket);
+    const artifacts = resolve(plan.cwd, ".agents/run");
+    await mkdir(artifacts, { recursive: true, mode: 0o700 });
+    ackDir = await mkdtemp(resolve(artifacts, "monitor-launch-"));
+    plan.ackPath = resolve(ackDir, "startup.json");
+    const envelope = Buffer.from(JSON.stringify(plan)).toString("base64url");
+    const command =
+      [quote(process.execPath), quote(helperPath), "run", quote(envelope)].join(
+        " ",
+      ) +
+      `; code=$?; printf '\nMonitored command exited %s\n' "$code"; export PI_TMUX_MONITOR_EXIT_CODE="$code"; exec bash -i`;
+    if (!session) {
+      attempted = true;
+      try {
+        const made = await createOwnedSession(tmux, {
+          name,
+          cwd: plan.cwd,
+          window: plan.window,
+          owner,
+          command: [command],
+        });
+        session = { id: made.sessionId, name: sessionName(name) };
+        pane = made.paneId;
+        created = true;
+      } catch (error) {
+        // A proven duplicate means this queue did not execute the workload.
+        // All other uncertain results must stop, never repeat creation.
+        if (
+          error.killed ||
+          error.code !== 1 ||
+          (error.stderr ?? "").trim() !==
+            `duplicate session: ${sessionName(name)}`
+        )
+          throw error;
+        const raced = await inspectServer(tmux);
+        if (raced.state !== "reachable")
+          throw Error("Concurrent session creation could not be inspected");
+        session = raced.sessions.find((s) => s.name === sessionName(name));
+        if (!session) throw Error("Concurrent session identity unavailable");
+        if (!plan.session)
+          await verifyWorkspace(tmux, raced, session, owner, () => true);
+        if (before.state === "reachable" && before.identity !== raced.identity)
+          throw Error("Server changed during concurrent launch");
+        before = raced;
+      }
+    }
+    if (!pane) {
+      if ((await tmux.identity()) !== before.identity)
+        throw Error("Server changed before launch");
+      attempted = true;
+      pane = await tmux.call(
         "-N",
         "new-window",
         "-d",
@@ -165,37 +242,77 @@ export async function launch(plan) {
         "-F",
         "#{pane_id}",
         "-t",
-        existing.id + ":",
+        session.id + ":",
         "-n",
         plan.window,
         "-c",
         formatLiteral(plan.cwd),
         command,
-      )
-    : (
-        await createOwnedSession(tmux, {
-          name: plan.session,
-          cwd: plan.cwd,
-          window: plan.window,
-          owner: sessionOwner(plan.owner, plan.ancestors.slice(0, -1)),
-          command: [command],
-        })
-      ).paneId;
-  if (!/^%\d+$/.test(pane))
-    throw new Error(
-      "Launch returned no pane identity; do not retry automatically",
+      );
+    }
+    const after = await inspectServer(tmux);
+    if (
+      after.state !== "reachable" ||
+      (before.state === "reachable" && before.identity !== after.identity)
+    )
+      throw Error("Server changed during launch");
+    target = await verifyTarget(tmux, after.identity, pane, session.id);
+    if (!plan.session)
+      await verifyWorkspace(tmux, after, session, owner, () => true);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      let ack;
+      try {
+        ack = JSON.parse(await readFile(plan.ackPath, "utf8"));
+      } catch {}
+      if (ack?.state === "unavailable") throw Error(ack.reason);
+      if (ack?.state === "ready") {
+        const record = await tmux.record("job", pane);
+        if (record?.jobId === plan.jobId) {
+          const confirmed = await verifyTarget(
+            tmux,
+            after.identity,
+            pane,
+            session.id,
+          );
+          if (
+            confirmed.windowId !== target.windowId ||
+            confirmed.panePid !== target.panePid
+          )
+            throw Error("Launch target changed before startup confirmation");
+          return {
+            ...confirmed,
+            state: "ready",
+            jobId: plan.jobId,
+            socket: plan.socket,
+            server: before.state === "absent" ? "became reachable" : "reused",
+            workspace: created ? "created" : "reused",
+            windowAction: "created",
+          };
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw Error(
+      "Startup was not confirmed; server-side Node/package/executable paths may be unavailable",
     );
-  // A bounded startup check reports path/environment failures without retrying
-  // creation. It does not wait for command completion or spend model tokens.
-  for (let attempt = 0; attempt < 20; attempt++) {
-    try {
-      const r = await tmux.record("job", pane);
-      if (r?.jobId === plan.jobId)
-        return { paneId: pane, jobId: plan.jobId, socket: plan.socket };
-    } catch {}
-    await new Promise((r) => setTimeout(r, 50));
+  } catch (error) {
+    const reason = error.code
+      ? "Tmux launch failed or timed out; inspect before retrying"
+      : error.message.slice(0, 320);
+    throw Object.assign(Error(reason), {
+      result: {
+        ...target,
+        socket: plan.socket,
+        session,
+        paneId: pane,
+        jobId: plan.jobId,
+        partial: attempted,
+        reason,
+        state: "unavailable",
+      },
+    });
+  } finally {
+    if (ackDir)
+      await rm(ackDir, { recursive: true, force: true }).catch(() => {});
   }
-  throw new Error(
-    `Pane ${pane} created, but registration was not confirmed. Inspect it; do not retry the launch blindly. Server-side Node/package/Pi paths must be accessible.`,
-  );
 }

@@ -274,7 +274,7 @@ test("scope modes, registered authority, unregistered evidence and own pane", ()
     ),
     true,
   );
-  assert.equal(eligible(u, "owner", config, null, "agent-unrelated"), true);
+  assert.equal(eligible(u, "owner", config, null), false);
   assert.equal(
     eligible(u, "stranger", { ...config, scope: "server" }, null),
     true,
@@ -436,10 +436,7 @@ for (const kind of ["batch", "service", "interactive"]) {
     j.heartbeatSeq++;
     assert.equal(state(30), "idle");
     assert.equal(state(31), "running"); // Application state is stale; runner remains fresh.
-    assert.match(
-      diagnostics[0],
-      /No fresh application state for pane %1/,
-    );
+    assert.match(diagnostics[0], /No fresh application state for pane %1/);
     assert.equal(state(32), "running");
     assert.equal(diagnostics.length, 1);
     p.pi = null;

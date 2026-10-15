@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFile, access, cp, mkdtemp, mkdir, rm } from "node:fs/promises";
+import {
+  readFile,
+  writeFile,
+  access,
+  cp,
+  mkdtemp,
+  mkdir,
+  rm,
+} from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -27,6 +35,9 @@ test("manifest resources, host peers and companion skill validate with Pi loader
   );
   assert.equal(manifest.peerDependencies["@earendil-works/pi-tui"], "*");
   assert.equal(manifest.dependencies, undefined);
+  assert.ok(manifest.files.includes("docs"));
+  for (const page of ["launching", "configuration", "development"])
+    await access(new URL(`../docs/${page}.md`, import.meta.url));
   await access(helperPath);
   await access(reporterPath);
   const result = loadSkillsFromDir({
@@ -36,6 +47,32 @@ test("manifest resources, host peers and companion skill validate with Pi loader
   assert.deepEqual(result.diagnostics, []);
   assert.equal(result.skills.length, 1);
   assert.equal(result.skills[0].name, "pi-tmux-monitor");
+  const skillFile = new URL(
+    "../skills/pi-tmux-monitor/SKILL.md",
+    import.meta.url,
+  );
+  const skill = await readFile(skillFile, "utf8");
+  assert.match(skill, /Fresh runner liveness alone means running/);
+  for (const [, path, anchor] of skill.matchAll(
+    /\]\(([^)#]+)(?:#([^)]*))?\)/g,
+  )) {
+    if (path.includes("://")) continue;
+    const target = new URL(path, skillFile);
+    await access(target);
+    if (anchor) {
+      const reference = await readFile(target, "utf8");
+      const headings = [...reference.matchAll(/^#{1,6} (.+)$/gm)].map((m) =>
+        m[1]
+          .toLowerCase()
+          .replace(/[^a-z0-9 _-]/g, "")
+          .replaceAll(" ", "-"),
+      );
+      assert.ok(
+        headings.includes(anchor),
+        `Unresolved skill link: ${path}#${anchor}`,
+      );
+    }
+  }
   assert.equal(
     result.skills[0].baseDir,
     packageRoot + "/skills/pi-tmux-monitor",
@@ -101,5 +138,109 @@ test("standalone helper runs beneath node_modules without a compiler or runtime 
   } finally {
     await tmux.call("kill-server").catch(() => {});
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("global Pi package context and project-local package paths resolve their actual helper without touching the user installation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "monitor-install-"));
+  const host =
+    process.env.PI_MONITOR_HOST_ROOT ??
+    "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent";
+  const hostManifest = JSON.parse(
+    await readFile(join(host, "package.json"), "utf8"),
+  );
+  const exec = promisify(execFile);
+  try {
+    for (const local of [false, true]) {
+      const agent = join(root, local ? "local-agent" : "global-agent"),
+        cwd = join(root, local ? "local-project" : "global-project");
+      const installed = local
+        ? join(cwd, "node_modules/pi-tmux-monitor")
+        : join(agent, "npm/node_modules/pi-tmux-monitor");
+      await mkdir(agent, { recursive: true });
+      await mkdir(cwd, { recursive: true });
+      await mkdir(installed, { recursive: true });
+      for (const name of [
+        "src",
+        "scripts",
+        "skills",
+        "package.json",
+        "pi-tmux-monitor.ts",
+      ])
+        await cp(
+          new URL("../" + name, import.meta.url),
+          join(installed, name),
+          { recursive: true },
+        );
+      if (local) {
+        await mkdir(join(cwd, ".pi"));
+        await writeFile(
+          join(cwd, ".pi/settings.json"),
+          JSON.stringify({ packages: [{ source: installed, skills: [] }] }),
+        );
+        await writeFile(join(agent, "settings.json"), "{}");
+      } else
+        await writeFile(
+          join(agent, "settings.json"),
+          JSON.stringify({ packages: [{ source: installed, skills: [] }] }),
+        );
+      const probe = join(root, "probe.ts");
+      await writeFile(
+        probe,
+        `export default function(pi){pi.on('session_start',()=>{let count=0;const timer=setInterval(()=>{if(process.env.PI_TMUX_MONITOR_HELPER || ++count>150){clearInterval(timer);console.error('INSTALL_HELPER='+process.env.PI_TMUX_MONITOR_HELPER);}},10);});}`,
+      );
+      const env = {
+        ...process.env,
+        PI_CODING_AGENT_DIR: agent,
+        PI_OFFLINE: "1",
+        PI_TELEMETRY: "0",
+      };
+      delete env.PI_TMUX_MONITOR_HELPER;
+      delete env.PI_TMUX_MONITOR_OWNER;
+      delete env.PI_TMUX_MONITOR_ANCESTORS;
+      delete env.TMUX;
+      delete env.TMUX_PANE;
+      const running = exec(
+        process.execPath,
+        [
+          join(host, hostManifest.bin.pi),
+          "--mode",
+          "rpc",
+          "--offline",
+          "--no-session",
+          "--no-context-files",
+          "--no-skills",
+          local ? "--approve" : "--no-approve",
+          "-e",
+          probe,
+        ],
+        { cwd, env, timeout: 10000 },
+      );
+      let diagnostics = "";
+      running.child.stderr.on("data", (chunk) => {
+        diagnostics += chunk;
+        if (diagnostics.includes("INSTALL_HELPER=")) running.child.stdin.end();
+      });
+      const result = await running;
+      assert.ok(
+        result.stderr.includes(
+          "INSTALL_HELPER=" + join(installed, "scripts/pi-tmux-monitor.mjs"),
+        ),
+        JSON.stringify({ local, stderr: result.stderr, stdout: result.stdout }),
+      );
+      const helper = join(installed, "scripts/pi-tmux-monitor.mjs");
+      const info = JSON.parse(
+        (
+          await exec(process.execPath, [helper, "inspect", "--cwd", cwd], {
+            cwd,
+            env,
+          })
+        ).stdout,
+      );
+      assert.equal(info.state, "absent");
+      assert.equal(info.socket, join(cwd, ".agents/run/tmux-socket"));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

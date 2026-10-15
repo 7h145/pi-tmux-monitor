@@ -1,19 +1,10 @@
 // @ts-nocheck
 import { resolve } from "node:path";
-import { realpath, readFile } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { Tmux } from "./tmux.mts";
 import { parseTmux } from "./protocol.mts";
 import { Reconciler, eligible } from "./reconcile.mts";
-export async function legacySession(pid = process.pid) {
-  try {
-    const stat = await readFile(`/proc/${pid}/stat`, "utf8");
-    const start = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19];
-    return /^\d+$/.test(start) ? `agent-p${pid}-${start}` : null;
-  } catch {
-    return null;
-  }
-}
 export class Observer {
   constructor({
     cwd,
@@ -60,11 +51,23 @@ export class Observer {
   }
   expire(now = this.clock()) {
     if (this.retired) return;
-    const slots = this.reconciler.expire(this.cache, now);
-    if (slots.some((p, i) => p.state !== this.slots[i]?.state)) {
+    const slots = this.scoped(this.reconciler.expire(this.cache, now));
+    if (
+      slots.length !== this.slots.length ||
+      slots.some(
+        (p, i) =>
+          p.paneId !== this.slots[i]?.paneId ||
+          p.state !== this.slots[i]?.state,
+      )
+    ) {
       this.slots = slots;
       this.publish(this.slots);
     }
+  }
+  scoped(panes) {
+    return panes.filter((p) =>
+      eligible(p, this.owner, this.config, this.ownPane),
+    );
   }
   async select() {
     if (["explicit", "project"].includes(this.selection)) return;
@@ -111,13 +114,15 @@ export class Observer {
             ownPane = this.env.TMUX_PANE;
         } catch {}
       }
-      const legacy = await legacySession();
       if (this.retired) return;
-      this.cache = panes.filter((p) =>
-        eligible(p, this.owner, this.config, ownPane, legacy),
-      );
+      // Observe every pane before scoping: an out-of-scope pane may be reused
+      // by this owner, and confirming that generation needs heartbeat history.
+      this.cache = panes;
+      this.ownPane = ownPane;
       const completedAt = this.clock();
-      this.slots = this.reconciler.reconcile(this.cache, completedAt);
+      this.slots = this.scoped(
+        this.reconciler.reconcile(this.cache, completedAt),
+      );
       this.lastSuccessfulScanAt = completedAt;
       this.degraded = false;
       this.publish(this.slots);
@@ -125,7 +130,9 @@ export class Observer {
       if (this.retired) return;
       this.reconciler.disconnect();
       this.degraded = true;
-      this.slots = this.reconciler.expire(this.cache, this.clock());
+      this.slots = this.scoped(
+        this.reconciler.expire(this.cache, this.clock()),
+      );
       this.diagnostic(
         "Monitor server unavailable; cached inventory may be stale",
       );

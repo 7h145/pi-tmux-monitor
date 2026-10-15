@@ -321,3 +321,31 @@ test("loading, polling and server status never bootstrap an absent explicit sock
       code: "ENOENT",
     });
   }));
+
+test("fresh context resolves launch socket independently of inherited observation", async () =>
+  scenario(async ({ emit, agent, cwd, tmux, commands, ctx, notices }) => {
+    await writeFile(
+      join(agent, "pi-tmux-monitor.json"),
+      JSON.stringify({
+        pollIntervalMs: 50,
+        heartbeatIntervalMs: 50,
+        staleAfterMs: 150,
+      }),
+    );
+    process.env.TMUX = `${tmux.socket},${await tmux.call("display-message", "-p", "#{pid}")},0`;
+    await emit("session_start");
+    const event = { systemPromptOptions: {} };
+    await emit("before_agent_start", event);
+    const info = JSON.parse(
+      event.systemPromptOptions.appendSystemPrompt
+        .split("<pi-tmux-monitor-launch-context>")[1]
+        .trim()
+        .split("\n")[0],
+    );
+    assert.equal(info.socket, join(cwd, ".agents/run/tmux-socket"));
+    assert.equal(info.observerSocket, tmux.socket);
+    assert.equal(info.owner, "original");
+    assert.ok(info.helper.endsWith("/scripts/pi-tmux-monitor.mjs"));
+    await commands.get("tmux-monitor").handler("diagnostics", ctx);
+    assert.equal(JSON.parse(notices.at(-1)).socket, info.socket);
+  }));
