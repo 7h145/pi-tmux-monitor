@@ -3,7 +3,7 @@ import { mkdir, stat, lstat, realpath } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { Tmux } from "./tmux.mts";
-import { OWNER, lineage } from "./protocol.mts";
+import { OWNER, lineage, serializeRecord } from "./protocol.mts";
 import { attachmentCommand, formatLiteral, quote } from "./shell.mts";
 
 export const workspaceName = (owner) =>
@@ -119,7 +119,7 @@ export async function createOwnedSession(
     "-t",
     sessionName(name) + ":",
     OWNER,
-    JSON.stringify(owner),
+    serializeRecord(owner),
   );
   const match = /^(\$\d+)\|(%\d+)$/.exec(raw);
   if (!match) throw Error("Session creation returned no verified identity");

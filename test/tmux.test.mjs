@@ -7,7 +7,7 @@ import { Tmux } from "../src/tmux.mts";
 import { Observer } from "../src/observer.mts";
 import { DEFAULTS } from "../src/config.mts";
 import { inspectServer as inspectServerForTest } from "../src/server.mts";
-import { JOB, PI } from "../src/protocol.mts";
+import { JOB, PI, serializeRecord } from "../src/protocol.mts";
 import { parseCLI, launch, helperPath, reporterPath } from "../src/launch.mts";
 import { job, reporter } from "./fixtures.mjs";
 async function server(fn) {
@@ -759,4 +759,71 @@ test("runner preserves a newer job inserted after its absence read", () =>
       Tmux.prototype.record = original;
     }
     assert.deepEqual(await tmux.record("job", "%0"), newer);
+  }));
+
+for (const type of ["job", "pi", "owner"]) {
+  test(`${type} metadata preserves dollars, quotes and Unicode through local option reads`, () =>
+    server(async ({ tmux }) => {
+      const owner = "owner$雪🦊";
+      const target = type === "owner" ? "$0" : "%0";
+      const option = { job: JOB, pi: PI, owner: "@pi-tmux-monitor-owner" }[
+        type
+      ];
+      const record =
+        type === "job"
+          ? job({
+              paneId: target,
+              ownerSessionId: owner,
+              ancestors: [owner],
+              label: "quote ' \" $HOME ${HOME} $(false) `false` \\ 雪 🦊",
+            })
+          : type === "pi"
+            ? reporter({
+                paneId: target,
+                parentSessionId: owner,
+                ancestors: [owner],
+                sessionId: "child$雪",
+              })
+            : { v: 1, ownerSessionId: owner, ancestors: ["root${HOME}雪"] };
+      await tmux.write(type, target, record);
+      assert.deepEqual(await tmux.record(type, target), record);
+      assert.equal(
+        await tmux.call(
+          "show-options",
+          ...(type === "owner" ? [] : ["-p"]),
+          "-v",
+          "-t",
+          target,
+          option,
+        ),
+        serializeRecord(record),
+      );
+      if (type !== "owner") {
+        const serverIdentity = await tmux.identity();
+        await tmux.call("set-option", "-p", "-u", "-t", target, option);
+        await tmux.write(type, target, record, {
+          serverIdentity,
+          allowAbsent: true,
+        });
+        assert.deepEqual(await tmux.record(type, target), record);
+        const updated = { ...record, heartbeatSeq: record.heartbeatSeq + 1 };
+        await tmux.write(type, target, updated, { serverIdentity });
+        assert.deepEqual(await tmux.record(type, target), updated);
+      }
+    }));
+}
+
+test("owned-session creation preserves literal owner and ancestor text", () =>
+  server(async ({ dir, tmux }) => {
+    const { createOwnedSession, sessionOwner } = await import(
+      "../src/server.mts"
+    );
+    const owner = sessionOwner("owner$雪🦊", ["root${HOME}雪"]);
+    const created = await createOwnedSession(tmux, {
+      name: "literal-owner",
+      cwd: dir,
+      owner,
+      command: ["/bin/sh"],
+    });
+    assert.deepEqual(await tmux.record("owner", created.sessionId), owner);
   }));

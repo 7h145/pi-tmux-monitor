@@ -35,6 +35,18 @@ export function lineage(owner, ancestors, includesOwner = false) {
     throw new Error("Ownership lineage exceeds bounds");
   return chain;
 }
+// Keep printed option values valid JSON across tmux builds and client locales.
+// Unicode escapes preserve text without exposing dollars to output escaping.
+export function serializeRecord(record) {
+  const raw = JSON.stringify(record).replace(
+    /[\u007f-\uffff$]/g,
+    (character) =>
+      "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+  if (Buffer.byteLength(raw) > 16384)
+    throw new Error("Monitor record exceeds limit");
+  return raw;
+}
 export function parseRecord(raw, type, paneId, diagnostic = (_message) => {}) {
   if (!raw) return null;
   try {

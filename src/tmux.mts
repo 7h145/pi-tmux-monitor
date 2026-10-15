@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { realpath, stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { JOB, PI, OWNER, parseRecord } from "./protocol.mts";
+import { JOB, PI, OWNER, parseRecord, serializeRecord } from "./protocol.mts";
 const exec = promisify(execFile);
 export class Tmux {
   constructor(socket, timeout = 1000) {
@@ -64,9 +64,7 @@ export class Tmux {
 
   async write(type, target, record, guard = undefined) {
     const option = { job: JOB, pi: PI, owner: OWNER }[type];
-    const raw = JSON.stringify(record);
-    if (Buffer.byteLength(raw) > 16384)
-      throw new Error("Monitor record exceeds limit");
+    const raw = serializeRecord(record);
     if (guard && type !== "owner") {
       const pid = guard.serverIdentity.split(":").at(-2);
       const start = guard.serverIdentity.split(":").at(-1);

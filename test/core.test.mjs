@@ -6,7 +6,13 @@ import { join } from "node:path";
 import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { DEFAULTS, applyLayer, loadConfig } from "../src/config.mts";
 import { format, fullSummary } from "../src/formatter.mts";
-import { STATES, parseRecord, parseTmux, lineage } from "../src/protocol.mts";
+import {
+  STATES,
+  parseRecord,
+  parseTmux,
+  lineage,
+  serializeRecord,
+} from "../src/protocol.mts";
 import { Reconciler, eligible } from "../src/reconcile.mts";
 import { parseCLI, piArgs } from "../src/launch.mts";
 import { quote } from "../src/shell.mts";
@@ -520,4 +526,16 @@ test("fresh runner survives reporter removal, incompatible reports, and reporter
   p.job.heartbeatSeq++;
   assert.equal(r.reconcile([p], 23)[0].state, "running");
   assert.equal(diagnostics.length, 2); // New workload does not inherit the prior reporter expectation.
+});
+
+test("record serialization preserves text in bounded ASCII JSON", () => {
+  const record = job({ label: "quote ' \" $HOME ${HOME} \\ 雪 🦊" });
+  const raw = serializeRecord(record);
+  assert.match(raw, /^[\x20-\x7e]+$/);
+  assert.ok(!raw.includes("$"));
+  assert.deepEqual(parseRecord(raw, "job", "%1"), record);
+  assert.throws(
+    () => serializeRecord({ value: "雪".repeat(3000) }),
+    /exceeds limit/,
+  );
 });
