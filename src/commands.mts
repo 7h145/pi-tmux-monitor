@@ -1,9 +1,5 @@
 // @ts-nocheck
-/**
- * Themed notice/status/help layout adapted from pi-oaistt src/extension.ts
- * (4fc2923), by thias and OpenAI Codex (gpt-6.1-sol), MIT licensed.
- * See THIRD_PARTY_NOTICES.md. Dispatch and snapshot presentation are separate.
- */
+// Dispatch and snapshot presentation are separate.
 import { STATES, STATE_DEFINITIONS } from "./protocol.mts";
 import { installationLabel } from "./version.mts";
 import { inspectionHint } from "./inspection.mts";

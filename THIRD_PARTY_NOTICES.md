@@ -1,8 +1,13 @@
 # Third-party notices
 
-`src/version.mts` and the themed notice/status/help formatting in
-`src/commands.mts` adapt pi-oaistt source at revision `4fc2923`.
-Original authors: thias and OpenAI Codex (gpt-6.1-sol).
+Code adapted from pi-oaistt at revision `4fc2923`:
+
+- `src/version.mts`, from `src/version.ts`.
+- The themed notice/status/help formatting in `src/commands.mts`, from
+  `src/extension.ts`.
+
+Original authors: thias <github.attic@typedef.net> and OpenAI Codex
+(gpt-6.1-sol).
 
 MIT License
 

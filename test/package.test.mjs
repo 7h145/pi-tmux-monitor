@@ -32,7 +32,10 @@ test("manifest resources, host peers and companion skill validate with Pi loader
   assert.ok(manifest.files.includes("LICENSE"));
   const license = await readFile(new URL("../LICENSE", import.meta.url), "utf8");
   assert.match(license, /^MIT License\n/);
-  assert.match(license, /Copyright \(c\) 2026 thias\n/);
+  assert.match(
+    license,
+    /Copyright \(c\) 2026 thias <github\.attic@typedef\.net>\n/,
+  );
   assert.match(license, /Permission is hereby granted, free of charge/);
   assert.deepEqual(manifest.pi.extensions, ["./pi-tmux-monitor.ts"]);
   assert.deepEqual(manifest.pi.skills, ["./skills/pi-tmux-monitor"]);

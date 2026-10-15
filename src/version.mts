@@ -1,13 +1,7 @@
 // @ts-nocheck
 /**
- * Adapted from pi-oaistt src/version.ts (4fc2923).
- * See THIRD_PARTY_NOTICES.md for attribution and the MIT licence.
- *
- * Purpose: identify the loaded installation without borrowing a parent repository.
- * Strategy: read its package version and optionally query only its own Git metadata.
- *
- * Author: thias <github.attic@typedef.net>, OpenAI Codex (gpt-6.1-sol)
- * License: MIT
+ * Identify the loaded installation without borrowing a parent repository.
+ * Read its package version and optionally query only its own Git metadata.
  */
 import { execFile } from "node:child_process";
 import { lstat, readFile, realpath } from "node:fs/promises";
