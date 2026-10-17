@@ -54,7 +54,7 @@ export default function monitor(pi: ExtensionAPI) {
       cwd: ctx.cwd,
     };
     runtime = current;
-    const diagnostic = (message: string) => {
+    const diagnostic = (message: string, { notify = true } = {}) => {
       message = message.slice(0, 320);
       if (
         current.retired ||
@@ -64,7 +64,7 @@ export default function monitor(pi: ExtensionAPI) {
         return;
       current.seen.add(message);
       current.diagnostics.push(message);
-      if (ctx.hasUI) ctx.ui.notify(message, "warning");
+      if (notify && ctx.hasUI) ctx.ui.notify(message, "warning");
     };
     current.config = await loadConfig(
       getAgentDir(),

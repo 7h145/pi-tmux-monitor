@@ -65,8 +65,18 @@ Each source starts unconfirmed until its sequence advances. Record receive
 times, not scan completion time, determine freshness. Reset or stale sources
 must not inherit an old source's confirmation. If Pi reporting disappears,
 a fresh runner may still establish running; otherwise registered work is
-unknown. Losing previously confirmed Pi reporting produces a diagnostic,
-not a claim that the task itself failed.
+unknown. Losing previously confirmed Pi reporting produces a bounded diagnostic,
+not a notification or a claim that the task itself failed.
+
+Snapshots separate current evidence `state` from `presentationState` and
+`uncertain`. Generation-bound presentation history lives in the reconciler,
+not the formatter. Retain confirmed application state across runner fallback;
+only fresh application reporting confirms it again. Generic runner liveness can
+confirm running without expecting a Pi reporter. Known exits remain confirmed.
+Reset history on workload/pane replacement, removed registration and namespace
+changes. Uncertain glyphs and whole count tokens use the current theme's `dim`
+foreground; normal idle uses the same color. Status glyphs match the footer,
+while State and diagnostics continue to describe reconciled evidence.
 
 The observer uses its existing poll timer to expire cached evidence even
 while an inventory scan is pending. Expiry does not reread tmux, overlap
@@ -117,7 +127,8 @@ persistent capability loss uses the same grace period. Diagnostics reports
 
 `format(orderedSlots, resolvedConfig, currentPiTheme, allocatedColumns)`
 returns `{ text, mode: 'strip' | 'summary' | 'partial' | 'hidden' }`.
-The formatter reads each slot's `state`; other inventory fields are ignored.
+The formatter reads each slot's `presentationState` (falling back to `state`)
+and `uncertain`; other inventory fields are ignored.
 
 If the symbol strip fits, keep it. Otherwise count the whole set in
 `summaryOrder`, omit zero counts and omit the numeral for singleton states,

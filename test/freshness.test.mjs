@@ -376,7 +376,8 @@ test("all workload-status forms expire and publish before snapshotting without s
         "status must notify synchronously before any inventory completion",
       );
       assert.match(messages[0], /last successful scan 15s ago/);
-      assert.ok(messages[0].includes("?"));
+      assert.equal(f.observer.slots[0].presentationState, "active");
+      assert.equal(f.observer.slots[0].uncertain, true);
       assert.equal(f.observer.slots[0].state, "unknown");
       assert.equal(f.publications.length, publications + 1);
       assert.equal(f.publications.at(-1)[0].state, "unknown");

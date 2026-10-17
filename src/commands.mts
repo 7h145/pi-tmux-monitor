@@ -3,9 +3,15 @@
 import { STATES, STATE_DEFINITIONS } from "./protocol.mts";
 import { installationLabel } from "./version.mts";
 import { inspectionHint } from "./inspection.mts";
+import { presentationState } from "./formatter.mts";
 import { STATUS_KEY } from "./footer.mts";
 import { serverCommand } from "./server.mts";
-import { renderTable, literalCell, noticeWidth } from "./tables.mts";
+import {
+  renderTable,
+  literalCell,
+  noticeWidth,
+  themedCell,
+} from "./tables.mts";
 
 const actions = {
   "": "status",
@@ -89,7 +95,14 @@ export function statusText(ctx, data, width = noticeWidth()) {
           p.workload?.label || "unavailable",
           p.workload?.kind ?? "unavailable",
           p.state,
-          glyph(data, p.state),
+          themedCell(
+            glyph(data, presentationState(p)),
+            (p.uncertain ?? p.state === "unknown")
+              ? "dim"
+              : (data.config?.themes[data.config.activeTheme]?.states[
+                  presentationState(p)
+                ]?.fg ?? null),
+          ),
           STATE_DEFINITIONS[p.state] ?? "unavailable",
         ]),
         width,
@@ -160,6 +173,7 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
     strong(ctx, "Notes:"),
     " • tmux-monitor never controls workloads or attaches to a tmux session.",
     " • Status shows cached data, refreshed automatically in the background.",
+    " • Dim glyphs may be last-known or unconfirmed; State reports current evidence. Normal idle glyphs are also dim.",
   ].join("\n");
 }
 
@@ -224,7 +238,12 @@ export function diagnosticData(current, context, data) {
     statusKey: current?.footer ? STATUS_KEY : undefined,
     degraded: current?.observer?.degraded ?? false,
     observation: data.health,
-    slots: data.slots.map((p) => ({ paneId: p.paneId, state: p.state })),
+    slots: data.slots.map((p) => ({
+      paneId: p.paneId,
+      state: p.state,
+      presentationState: presentationState(p),
+      uncertain: p.uncertain ?? p.state === "unknown",
+    })),
     diagnostics: [...(current?.diagnostics ?? [])],
   };
 }

@@ -338,8 +338,8 @@ for (const [mode, activeTheme, producerFirst] of [
         const formatterPath = join(bundle, "src", "formatter.mts");
         const formatter = await readFile(formatterPath, "utf8");
         const changed = formatter.replace(
-          "const style = (state, config, theme) => {",
-          'const style = (state, config, theme) => {\n  if (state === "unregistered") return theme.fg("dim", "~");',
+          "  const s = config.themes[config.activeTheme].states[state];",
+          '  if (state === "unregistered") return theme.fg("dim", "~");\n  const s = config.themes[config.activeTheme].states[state];',
         );
         assert.notEqual(changed, formatter);
         await writeFile(formatterPath, changed);

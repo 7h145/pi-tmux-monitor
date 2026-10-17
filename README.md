@@ -184,12 +184,17 @@ not mean a delegated task's answer is correct or a service is ready to use.
 
 Reports are checked periodically. With the default settings, a new task
 can take about seven seconds to be confirmed; `?` during that time is
-normal. If Pi's activity reports stop, a fresh command report can still
-show `R`; without either, the task becomes `?`. Reports that have not
-advanced for 15 seconds are no longer trusted. If the connection is lost,
-cached tasks remain visible: live activity becomes unknown, while known
-command exits remain. The status view warns when its last successful scan
-is old.
+normal. Reports that have not advanced for 15 seconds are no longer trusted.
+When reporting disappears, the footer retains the last confirmed symbol in dim
+color: it means **last reported**, not confirmed current activity. Without any
+confirmed history it shows a dim `?`. Normal idle `_` also uses dim color.
+
+Status's State column and diagnostics describe current evidence: a fresh command
+report may establish running even while the glyph retains uncertain Pi activity.
+Reporter loss stays in diagnostics, without unsolicited warning notifications.
+If the connection is lost, cached tasks remain visible with uncertain live glyphs;
+known command exits remain confirmed. The status view warns when its last
+successful scan is old.
 
 ## Starting tasks from a shell
 

@@ -7,7 +7,17 @@ import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 export const noticeWidth = () =>
   Math.max(1, (process.stdout.columns ?? 80) - 2);
 export const literalCell = (value) => String(value).replace(/\p{C}/gu, "�");
+const THEMED = Symbol("themed table cell");
+// Only explicitly constructed cells may add styling; metadata stays literal.
+export const themedCell = (text, fg) => ({
+  [THEMED]: true,
+  text: literalCell(text),
+  fg,
+});
 export function tableCell(value) {
+  return codeCell(literalCell(value));
+}
+function codeCell(value) {
   const code = (text) => {
     if (!text) return "";
     const fence = "`".repeat(
@@ -19,12 +29,14 @@ export function tableCell(value) {
   };
   // Code spans keep metadata literal, including links/math. Put escaped pipes
   // between spans so preceding backslashes cannot turn them into separators.
-  return literalCell(value).split("|").map(code).join("\\|");
+  return value.split("|").map(code).join("\\|");
 }
 
 export function renderTable(ctx, headers, rows, width = noticeWidth()) {
   const strong = (text) => ctx.ui.theme.style(text, { fg: "text", bold: true });
   const muted = (text) => ctx.ui.theme.fg("muted", text);
+  const styled = (cell) =>
+    cell.fg === null ? cell.text : ctx.ui.theme.fg(cell.fg, cell.text);
   // A cramped multi-column table is harder to read than labelled fields. This
   // also avoids Markdown's raw-source fallback when borders cannot fit.
   if (width < 7 * headers.length + 1) {
@@ -34,7 +46,7 @@ export function renderTable(ctx, headers, rows, width = noticeWidth()) {
           headers
             .map(
               (header, i) =>
-                `${strong(literalCell(header) + ":")} ${muted(literalCell(row[i]))}`,
+                `${strong(literalCell(header) + ":")} ${row[i]?.[THEMED] ? styled(row[i]) : muted(literalCell(row[i]))}`,
             )
             .join("\n"),
           0,
@@ -48,7 +60,8 @@ export function renderTable(ctx, headers, rows, width = noticeWidth()) {
       .join("\n\n");
   }
   const sourceRows = [headers, ...rows].map(
-    (row) => `| ${row.map(tableCell).join(" | ")} |`,
+    (row) =>
+      `| ${row.map((cell) => (cell?.[THEMED] ? codeCell(styled(cell)) : tableCell(cell))).join(" | ")} |`,
   );
   sourceRows.splice(1, 0, `| ${headers.map(() => "---").join(" | ")} |`);
   const markdown = sourceRows.join("\n");

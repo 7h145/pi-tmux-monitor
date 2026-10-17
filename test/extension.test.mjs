@@ -349,3 +349,62 @@ test("fresh context resolves launch socket independently of inherited observatio
     await commands.get("tmux-monitor").handler("diagnostics", ctx);
     assert.equal(JSON.parse(notices.at(-1)).socket, info.socket);
   }));
+
+test("reporter loss stays in diagnostics without a notification; server failures still notify", async () =>
+  scenario(
+    async ({ emit, tmux, setTrusted, commands, ctx, notices, statuses }) => {
+      const { job, reporter } = await import("./fixtures.mjs");
+      let seq = 1,
+        failing = false;
+      const original = Tmux.prototype.inventory;
+      Tmux.prototype.inventory = async function (...args) {
+        if (this.socket !== tmux.socket) return original.apply(this, args);
+        if (failing) throw Error("unavailable");
+        return [
+          {
+            paneId: "%20",
+            pid: "20",
+            sessions: [],
+            job: job({ paneId: "%20", heartbeatSeq: seq }),
+            pi: reporter({
+              paneId: "%20",
+              jobId: "j",
+              kind: "batch",
+              state: "active",
+              heartbeatSeq: seq,
+            }),
+          },
+        ];
+      };
+      try {
+        setTrusted(true);
+        await emit("session_start");
+        seq++;
+        for (let i = 0; i < 60 && statuses.get(STATUS_KEY) !== "A"; i++)
+          await new Promise((r) => setTimeout(r, 10));
+        assert.equal(statuses.get(STATUS_KEY), "A");
+        await new Promise((r) => setTimeout(r, 220));
+        assert.ok(!notices.some((s) => s.startsWith("No fresh application")));
+        await commands.get("tmux-monitor").handler("diagnostics", ctx);
+        const info = JSON.parse(notices.at(-1));
+        assert.ok(
+          info.diagnostics.some((s) => s.startsWith("No fresh application")),
+        );
+        assert.equal(info.slots[0].presentationState, "active");
+        assert.equal(info.slots[0].uncertain, true);
+        failing = true;
+        for (
+          let i = 0;
+          i < 60 &&
+          !notices.some((s) => s.startsWith("Monitor server unavailable"));
+          i++
+        )
+          await new Promise((r) => setTimeout(r, 10));
+        assert.ok(
+          notices.some((s) => s.startsWith("Monitor server unavailable")),
+        );
+      } finally {
+        Tmux.prototype.inventory = original;
+      }
+    },
+  ));

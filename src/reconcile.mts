@@ -65,7 +65,7 @@ export class Reconciler {
     return panes.map((p) => {
       const j = p.job,
         r = p.pi;
-      const jf = this.fresh(p.paneId, "job", j, now),
+      let jf = this.fresh(p.paneId, "job", j, now),
         rf = this.fresh(p.paneId, "pi", r, now);
       let g = this.generations.get(p.paneId);
       if (!g) g = { pid: p.pid, invalidJobs: new Set() };
@@ -73,6 +73,11 @@ export class Reconciler {
         if (j) g.invalidJobs.add(j.jobId);
         g.pid = p.pid;
         g.piWorkload = null;
+        g.presentationState = undefined;
+        g.presentationSource = undefined;
+        this.sources.delete(p.paneId + ":job");
+        this.sources.delete(p.paneId + ":pi");
+        jf = rf = false;
       }
       // Confirm cooperative reuse without letting an unrelated Pi displace a
       // live job. Once invalidated, a job cannot regain state or ownership.
@@ -110,6 +115,8 @@ export class Reconciler {
         g.generation = generation;
         g.sawApplication = false;
         g.reporterLost = false;
+        g.presentationState = undefined;
+        g.presentationSource = undefined;
       }
       if (applicationState) {
         g.sawApplication = true;
@@ -118,6 +125,7 @@ export class Reconciler {
         g.reporterLost = true;
         this.diagnostic(
           `No fresh application state for pane ${p.paneId}; internal activity is unknown`,
+          { notify: false },
         );
       }
       let state = "unknown";
@@ -125,7 +133,29 @@ export class Reconciler {
       else if (ended) state = j.phase;
       else if (applicationState) state = r.state;
       else if (validJob && jf && j.phase === "running") state = "running";
-      return { ...p, state, workload };
+      // Remember application activity independently of fallback runner liveness.
+      // Only current, trustworthy evidence can confirm or update the presentation.
+      let presentationState,
+        uncertain = false;
+      if (state === "unregistered") {
+        g.presentationState = g.presentationSource = undefined;
+        presentationState = state;
+      } else if (
+        ended ||
+        applicationState ||
+        (state === "running" && g.presentationSource !== "application")
+      ) {
+        g.presentationState = presentationState = state;
+        g.presentationSource = ended
+          ? "outcome"
+          : applicationState
+            ? "application"
+            : "runner";
+      } else {
+        presentationState = g.presentationState ?? "unknown";
+        uncertain = true;
+      }
+      return { ...p, state, presentationState, uncertain, workload };
     });
   }
 }

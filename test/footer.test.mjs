@@ -32,7 +32,7 @@ const configs = [
   DEFAULTS,
   { ...DEFAULTS, themes: example.themes, activeTheme: "gaudy" },
 ];
-function harness({ trace = false } = {}) {
+function harness({ trace = false, semantic = false } = {}) {
   const events = createEventBus(),
     handlers = new Map(),
     statuses = new Map(),
@@ -45,7 +45,10 @@ function harness({ trace = false } = {}) {
     get ui() {
       assert.ok(active, "retired context");
       return {
-        theme: { fg: (_, s) => `\x1b[${color}m${s}\x1b[39m` },
+        theme: {
+          fg: (fg, s) =>
+            `\x1b[${semantic && fg === "dim" ? "90" : color}m${s}\x1b[39m`,
+        },
         setStatus: (k, v) => {
           publications++;
           if (v === undefined) statuses.delete(k);
@@ -463,7 +466,7 @@ for (const dynamic of [false, true])
     { skip: dynamic && !compositor },
     async (t) => {
       t.mock.timers.enable({ apis: ["setInterval"] });
-      const h = harness();
+      const h = harness({ semantic: true });
       const adapter = new FooterAdapter(h.pi, h.ctx, DEFAULTS, (s) =>
         h.diagnostics.push(s),
       );
@@ -525,6 +528,7 @@ for (const dynamic of [false, true])
         const line = () =>
           stripTerminalSequences(component.render(140)[dynamic ? 0 : 2]);
         assert.ok(line().endsWith("A"));
+        const beforeExpiry = h.statuses.get(STATUS_KEY);
         waiting = true;
         scanning = observer.scan();
         await receiving;
@@ -534,8 +538,12 @@ for (const dynamic of [false, true])
         t.mock.timers.tick(DEFAULTS.pollIntervalMs);
         assert.equal(h.publications, publications + 1);
         assert.equal(calls, queries);
-        assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "?");
-        assert.ok(line().endsWith("?"));
+        assert.equal(stripTerminalSequences(h.statuses.get(STATUS_KEY)), "A");
+        assert.notEqual(h.statuses.get(STATUS_KEY), beforeExpiry);
+        assert.ok(h.statuses.get(STATUS_KEY).includes("\x1b[90mA"));
+        assert.ok(line().endsWith("A"));
+        assert.equal(observer.slots[0].state, "unknown");
+        assert.equal(observer.slots[0].uncertain, true);
         assert.equal(observer.lastSuccessfulScanAt, 5000);
         const count = h.publications;
         observer.stop();

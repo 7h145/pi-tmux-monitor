@@ -57,7 +57,9 @@ export class Observer {
       slots.some(
         (p, i) =>
           p.paneId !== this.slots[i]?.paneId ||
-          p.state !== this.slots[i]?.state,
+          p.state !== this.slots[i]?.state ||
+          p.presentationState !== this.slots[i]?.presentationState ||
+          p.uncertain !== this.slots[i]?.uncertain,
       )
     ) {
       this.slots = slots;
