@@ -150,10 +150,15 @@ place the indicator on the right side of Pi's footer and tell it how much
 space is available. Load that extension separately if you want the
 indicator to fit alongside your other footer information.
 
-With the compositor, you normally see one symbol per pane. When space is
-tight, the monitor switches to counts, then to a shorter summary of the
-states needing attention. Other footer items can take priority and leave
-no room for it.
+With the compositor, you normally see one symbol per pane in creation order.
+Consecutive runs of six or more successful/failed outcomes become local counts,
+even when the individual symbols would fit: `ARR|!2+4|R` means two failures and
+four successes between the surrounding panes. The `|` marks a group boundary,
+not omitted work. Shorter outcome runs stay individual.
+
+When space is tight, the monitor summarizes the entire set, then uses a shorter
+summary of the states needing attention. Other footer items can take priority
+and leave no room for it.
 
 Without the compositor, the monitor still publishes a count summary on
 Pi's extension-status line. This fallback does not know the available
@@ -173,7 +178,7 @@ rather than support the width-aware display.
 | `:` | Unregistered | The pane is included, but has no recognized task report |
 
 Symbols follow pane creation order, not the order in which tasks became
-active. In a count summary, `A3 _5 R+?` means three active, five idle, one
+active. In a count summary, `A3_5R+?` means three active, five idle, one
 running, one successful and one unknown. An ending `…` means some states
 could not fit. Custom themes can change the symbols; help always shows
 the mapping currently in use.

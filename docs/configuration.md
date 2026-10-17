@@ -109,7 +109,8 @@ configured to look elsewhere.
 
 ### Themes
 
-Each theme defines an `overflow` symbol and a `states` object. Each state
+Each theme defines `overflow` (default `…`), `summarySeparator` (default `|`)
+and a `states` object. The separator marks local summary boundaries, not omission. Each state
 has a `glyph` and `fg` color. For example, this changes only the active
 symbol's color in the built-in theme:
 
@@ -131,7 +132,8 @@ their own settings. Personal/project patches to the same theme merge.
 Set `activeTheme` to a name you have defined; merely choosing `gaudy`
 without adding its definition does not enable the example theme.
 
-All symbols, including overflow, must be distinct within the theme. Each
+All symbols, including overflow and the summary separator, must be distinct
+within the theme. Each
 must be one grapheme occupying one terminal column, not a number,
 whitespace or a control character. `fg` is a semantic Pi theme color such
 as `accent`, `warning`, `success` or `dim`, or `null` for no foreground

@@ -43,7 +43,7 @@ test("formatter thresholds, singleton groups and priority", () => {
   assert.equal(plain(format(fixture, DEFAULTS, theme, 4)), ":__R");
   assert.equal(
     plain(fullSummary(slots(5, 3, 1, 1, 0, 1), DEFAULTS, theme)),
-    "A3 _5 R+?",
+    "A3_5R+?",
   );
   assert.equal(
     format(slots(5, 3, 1, 1, 0, 1), DEFAULTS, theme, 9).mode,
@@ -51,11 +51,11 @@ test("formatter thresholds, singleton groups and priority", () => {
   );
   assert.equal(
     plain(format(slots(100, 20, 0, 0, 2, 1), DEFAULTS, theme, 6)),
-    "!2…",
+    "!2A20…",
   );
   assert.equal(
     plain(format(slots(100, 20, 0, 0, 2, 1), DEFAULTS, theme, 8)),
-    "!2 A20…",
+    "!2A20?…",
   );
   assert.equal(plain(format(slots(10000, 1000), DEFAULTS, theme, 1)), "…");
   assert.equal(plain(format(slots(10000, 1000), DEFAULTS, theme, 3)), "…");

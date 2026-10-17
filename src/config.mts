@@ -5,6 +5,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { STATES } from "./protocol.mts";
 export const DEFAULT_THEME = {
   overflow: "…",
+  summarySeparator: "|",
   states: Object.fromEntries(
     STATES.map((s, i) => [
       s,
@@ -122,10 +123,11 @@ export function validate(config) {
       throw new Error("Invalid order");
   if (!plain(config.themes)) throw new Error("Invalid themes");
   for (const t of Object.values(config.themes)) {
-    keys(t, ["overflow", "states"]);
+    keys(t, ["overflow", "summarySeparator", "states"]);
     glyph(t.overflow);
+    glyph(t.summarySeparator);
     keys(t.states, STATES);
-    const glyphs = [t.overflow];
+    const glyphs = [t.overflow, t.summarySeparator];
     for (const s of STATES) {
       const v = t.states[s];
       keys(v, ["glyph", "fg"]);

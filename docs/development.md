@@ -126,18 +126,29 @@ persistent capability loss uses the same grace period. Diagnostics reports
 ### Replacing the formatter
 
 `format(orderedSlots, resolvedConfig, currentPiTheme, allocatedColumns)`
-returns `{ text, mode: 'strip' | 'summary' | 'partial' | 'hidden' }`.
+returns `{ text, mode: 'strip' | 'hybrid' | 'summary' | 'partial' | 'hidden' }`.
 The formatter reads each slot's `presentationState` (falling back to `state`)
 and `uncertain`; other inventory fields are ignored.
 
-If the symbol strip fits, keep it. Otherwise count the whole set in
-`summaryOrder`, omit zero counts and omit the numeral for singleton states,
-combining adjacent singletons: `A3 _5 R+?`. If that does not fit, use the
-longest prefix of complete count tokens in `partialOrder`, reserving one
-column for overflow, such as `!2 A20…`. Stop at the first token that does
-not fit; never split a number or skip to a lower-priority state. One column
-shows only `…`; zero budget or an empty set is hidden. Quiet idle sets and
-retained outcomes are not hidden just for being quiet.
+Build the hybrid candidate in creation order: collapse maximal consecutive runs
+of at least six success/failed presentation slots into local summaries. Keep all
+other slots as individual glyphs. Use the theme's `summarySeparator` between
+summaries and adjacent strips, never at the outer edges: `ARR|!2+4|R`. Do this
+even when a full per-pane strip would fit. Return `hybrid` if a run qualifies,
+otherwise `strip`.
+
+If the candidate exceeds the budget, count the entire set in `summaryOrder`.
+Use dense tokens everywhere: `A3_5R+?`, omitting zero counts and singleton numerals.
+If the whole summary does not fit, keep the longest prefix of complete tokens in
+`partialOrder`, reserving one column for overflow: `!2A20…`. Stop at the first
+token that does not fit; never split numbers or skip a higher-priority state.
+One column shows only `…`; zero budget or an empty set is hidden. Quiet idle sets
+and retained outcomes are not hidden just for being quiet.
+
+Local counts refer only to their grouped slots; whole/partial summaries count
+the full set. A token is dim if any member is uncertain. Reporting loss/recovery
+alone changes styling, not grouping, token text or width. Actual state/generation
+changes may regroup normally.
 
 Measure with Pi TUI's `visibleWidth`, excluding ANSI SGR sequences. Rendering
 must be synchronous, single-line, free of I/O and side effects, and no wider

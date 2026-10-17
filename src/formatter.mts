@@ -30,16 +30,42 @@ export function summaryTokens(
     .filter((s) => counts[s])
     .map((s) => ({
       text: style(s, config, theme, uncertain.has(s), counts[s]),
-      singleton: counts[s] === 1,
     }));
 }
-function join(tokens) {
-  return tokens
-    .map(
-      (t, i) =>
-        (i && !(t.singleton && tokens[i - 1].singleton) ? " " : "") + t.text,
-    )
-    .join("");
+const join = (tokens) => tokens.map((token) => token.text).join("");
+
+// Group only consecutive outcome presentations; never reorder pane identities.
+function hybrid(slots, config, theme) {
+  const outcome = (slot) =>
+    ["success", "failed"].includes(presentationState(slot));
+  const parts = [];
+  for (let i = 0; i < slots.length; ) {
+    let end = i;
+    while (end < slots.length && outcome(slots[end])) end++;
+    if (end - i >= 6) {
+      parts.push({
+        text: fullSummary(slots.slice(i, end), config, theme),
+        summary: true,
+      });
+      i = end;
+    } else {
+      parts.push({
+        text: slotGlyph(slots[i++], config, theme),
+        summary: false,
+      });
+    }
+  }
+  const separator = config.themes[config.activeTheme].summarySeparator;
+  return {
+    text: parts
+      .map(
+        (part, i) =>
+          (i && (part.summary || parts[i - 1].summary) ? separator : "") +
+          part.text,
+      )
+      .join(""),
+    mode: parts.some((part) => part.summary) ? "hybrid" : "strip",
+  };
 }
 export function fullSummary(slots, config, theme) {
   return join(summaryTokens(slots, config, theme));
@@ -47,8 +73,8 @@ export function fullSummary(slots, config, theme) {
 export function format(slots, config, theme, columns) {
   const budget = Math.max(0, Math.floor(columns));
   if (!slots.length || !budget) return { text: "", mode: "hidden" };
-  const strip = slots.map((s) => slotGlyph(s, config, theme)).join("");
-  if (visibleWidth(strip) <= budget) return { text: strip, mode: "strip" };
+  const candidate = hybrid(slots, config, theme);
+  if (visibleWidth(candidate.text) <= budget) return candidate;
   const summary = fullSummary(slots, config, theme);
   if (visibleWidth(summary) <= budget)
     return { text: summary, mode: "summary" };

@@ -563,3 +563,36 @@ for (const dynamic of [false, true])
       }
     },
   );
+
+test("actual compositor: hybrid grouping and whole-token uncertainty survive resize and fallback", {skip:!compositor}, () => {
+  for(const config of configs)for(const producerFirst of [false,true]) {
+    const h=harness({trace:true,semantic:true}); let adapter;
+    try {
+      if(!producerFirst)h.start();
+      adapter=new FooterAdapter(h.pi,h.ctx,config,()=>{});
+      if(producerFirst)h.start();
+      const rows=["active","failed","failed","success","success","success","success","running",
+        ...Array(25).fill("idle")].map(state=>({state}));
+      adapter.publish(rows);
+      h.ctx.ui.setStatus("footer-compositor:right:10:git","clean");
+      h.ctx.ui.setStatus("footer-compositor:right:20:usage","C W2%");
+      const component=footer(h.statuses);
+      const before=Array.from({length:141},(_,width)=>stripTerminalSequences(component.render(width)[0]));
+      assert.ok([...h.allocations].some(a=>format(rows,config,a.theme,a.maxWidth).mode==="hybrid"));
+      assert.ok(before[140].includes(config.themes[config.activeTheme].summarySeparator));
+      rows[1]={state:"unknown",presentationState:"failed",uncertain:true};
+      adapter.publish(rows);
+      const token=config.themes[config.activeTheme].states.failed.glyph+"2";
+      assert.ok(h.statuses.get(STATUS_KEY).includes(`\x1b[90m${token}\x1b[39m`));
+      assert.ok(!stripTerminalSequences(h.statuses.get(STATUS_KEY)).includes(config.themes[config.activeTheme].summarySeparator));
+      for(let width=0;width<=140;width++) {
+        const line=component.render(width)[0];
+        assert.equal(stripTerminalSequences(line),before[width]);
+        assert.ok(visibleWidth(line)<=width);
+      }
+      assert.ok(component.render(140)[0].includes(`\x1b[90m${token}\x1b[39m`));
+      h.stop();
+      assert.equal(h.statuses.get(STATUS_KEY),fullSummary(rows,config,h.ctx.ui.theme));
+    } finally {adapter?.stop();h.stop();}
+  }
+});
