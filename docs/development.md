@@ -23,13 +23,14 @@ The main files are:
 | `src/tmux.mts` | Bounded tmux calls, local-option reads and guarded writes |
 | `src/protocol.mts` | Validation of versioned status records and lineage |
 | `src/observer.mts` | Server selection, inventory, scan age and cached expiry |
-| `src/reconcile.mts` | Ownership, generation changes and state freshness |
+| `src/reconcile.mts` | Ownership, freshness and generation-bound presentation history |
 | `src/reporter.mts` | This Pi's activity reports |
 | `src/runner.mjs` | Command liveness and exit reports |
 | `src/helper.mts`, `src/launch.mts` | Public script dispatch/results and workload launch |
 | `src/server.mts` | Shared server inspection and owned-session creation |
 | `src/formatter.mts`, `src/footer.mts` | Pure indicator formatting and footer integration |
 | `src/commands.mts`, `src/tables.mts` | Command views and literal, width-aware tables |
+| `src/workspaces.mts` | Display-only default-workspace references and mappings |
 | `src/shell.mts`, `src/inspection.mts` | Shell quoting and verified manual attachment hints |
 | `src/version.mts` | This installation's version and optional Git identity |
 
@@ -75,8 +76,11 @@ only fresh application reporting confirms it again. Generic runner liveness can
 confirm running without expecting a Pi reporter. Known exits remain confirmed.
 Reset history on workload/pane replacement, removed registration and namespace
 changes. Uncertain glyphs and whole count tokens use the current theme's `dim`
-foreground; normal idle uses the same color. Status glyphs match the footer,
-while State and diagnostics continue to describe reconciled evidence.
+foreground. Status glyphs match the footer, while State and diagnostics describe
+reconciled evidence.
+
+`_` is dim by default because idle work usually needs little attention, and even
+less when it no longer reports state. It keeps that color when uncertain.
 
 The observer uses its existing poll timer to expire cached evidence even
 while an inventory scan is pending. Expiry does not reread tmux, overlap
@@ -127,8 +131,10 @@ persistent capability loss uses the same grace period. Diagnostics reports
 
 `format(orderedSlots, resolvedConfig, currentPiTheme, allocatedColumns)`
 returns `{ text, mode: 'strip' | 'hybrid' | 'summary' | 'partial' | 'hidden' }`.
-The formatter reads each slot's `presentationState` (falling back to `state`)
-and `uncertain`; other inventory fields are ignored.
+Observer snapshots supply `state` (current evidence), `presentationState`
+(last-known presentation) and `uncertain` (a boolean). For direct formatter
+inputs, an omitted presentation state uses `state`; omitted uncertainty defaults
+to true for an unknown presentation. Other inventory fields are ignored.
 
 Build the hybrid candidate in creation order: collapse maximal consecutive runs
 of at least six success/failed presentation slots into local summaries. Keep all
@@ -160,13 +166,17 @@ Preserve `fullSummary()` for static fallback if replacing the formatter.
 Slash commands accept complete lowercase words, whitespace around/between
 them and the aliases listed in the README. `s` means status at either level;
 `start` has no abbreviation. `up`, shutdown commands and extra arguments
-are rejected. Status uses cached rows with Glyph first, followed by Pane, Location, Label,
-Kind and evidence State. It never aggregates rows or repeats a Meaning column.
-Tables stack fields when their headers cannot fit legibly; glyph cells preserve
-trusted theme styling while metadata remains literal. Server commands make fresh
-checks. Generated default
-workspace names use invocation-local unique hash prefixes, starting at seven
-characters, with full-name mappings below the table. Custom names remain literal.
+are rejected. Status uses cached rows with Glyph first, followed by Pane,
+Location, Label, Kind and evidence State. It keeps one row per pane; definitions
+live in help. Tables stack fields when their headers cannot fit legibly. Glyph
+cells preserve trusted theme styling while metadata remains literal. Server
+commands make fresh checks.
+
+Generated default workspace names use invocation-local unique hash prefixes,
+starting at seven characters, with full-name mappings below the table. The
+recognizer accepts `pi-workspace-` followed by a 64-character lowercase hexadecimal
+hash; other session names remain literal. Linked-session references are resolved
+together, and repeated workspaces have only one mapping.
 These references never rename sessions, establish ownership or become targets.
 Only full `tmux start` creates resources. No command forces an inventory
 scan, modifies settings, requests a model turn or inserts its notice into

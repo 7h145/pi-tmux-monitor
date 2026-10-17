@@ -83,17 +83,32 @@ tmux -S /absolute/returned/socket capture-pane -t '%VERIFIED_PANE_NUMBER' -p -S 
 ```
 
 Use `/tmux-monitor help` for a verified manual attach hint and effective prefix,
-then Prefix+s for native inspection. Native input, interrupts and deliberate
-cleanup remain possible separately; verify targets first. The observer is read-only.
+then Prefix+s for native inspection or Prefix+d to detach without ending work.
+Native input, interrupts and deliberate cleanup remain possible separately;
+verify targets first. The observer is read-only.
 
 ## Interpret states
 
 `_` idle, `A` active, `R` running, `+` command success, `!` failure, `?` unknown,
 `:` eligible unregistered pane. Themes may change glyphs; help shows active values.
 Fresh application reporting supplies idle/active/final-error state for any kind.
-Fresh runner liveness alone means running; missing trustworthy evidence means
-unknown. Known exits take precedence. Idle is not task completion, and pane existence does
-not establish running or idle. Loss of confirmed reporting appears in diagnostics.
+Fresh runner liveness alone means running; without trustworthy sources the
+current evidence state is unknown. Known command exits take precedence. Idle is
+not task completion, and pane existence does not establish running or idle.
+
+The footer can retain a last-known glyph in dim foreground when reporting is
+lost, even while fresh runner evidence establishes running. With no confirmed
+history it uses a dim unknown glyph. Check status's State column and diagnostics
+for current evidence rather than treating a retained glyph as fresh activity.
+Reporter loss stays in diagnostics, without unsolicited warnings; known command
+exits remain confirmed.
+
+Counts are dense, for example `A3_5R+?`. In the default hybrid view, consecutive
+runs of six or more success/failed presentations become local counts. The theme's
+summary separator (`|` by default) separates them from neighboring glyphs, with
+no separators at the outer edges. A whole count token is dim if any member is
+uncertain. Reporting loss/recovery alone changes styling, not
+grouping. See [reading the indicator](../../README.md#reading-the-indicator).
 
 Commands execute in the tmux server's environment. The cwd, Node/Bash, helper files
 and requested executable must be usable there; Pi reporting additionally needs Pi

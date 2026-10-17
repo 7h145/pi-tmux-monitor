@@ -77,6 +77,10 @@ The script creates a new tmux window and starts `sleep 10` in it. It creates
 the server and a session for your Pi conversation if needed. There is no
 preliminary setup command or extra unused shell window. Later launches
 reuse that session, adding a new window rather than replacing existing work.
+The default workspace belongs to the launching Pi conversation. A child Pi
+starts in a window there; it does not get a separate workspace merely by
+starting. If that child later launches work without an explicit session, it
+uses its own default workspace.
 
 The command returns after startup is confirmed, not after `sleep` finishes.
 The footer can show `R` once running reports are confirmed, then `+` after
@@ -98,13 +102,17 @@ explicitly, for example `-- bash -lc 'npm test && npm run build'`.
 Add `--session NAME` when you deliberately want a dedicated or shared
 session. If that session already exists, the script leaves its ownership
 unchanged; only the new task is associated with the requesting Pi.
-Otherwise a new session receives that association. Without this option,
+Otherwise a new session receives that association. Sharing a session does not
+make registered tasks jointly owned. Each Pi still follows its configured
+[scope and ownership](configuration.md#scope-and-ownership). Without this option,
 the script selects the same session as `/tmux-monitor tmux start`.
 You do not need to calculate its name.
 
 Session and window names accept letters, digits, `.`, `_` and `-`, up to
-128 characters. An optional label accepts up to 128 characters without
-control characters. A repeated window name does not replace the old window.
+128 characters. Dots in session names become underscores; use the verified
+returned session identity rather than assuming its name matches your input.
+An optional label accepts up to 128 characters without control characters.
+A repeated window name does not replace the old window.
 
 ## Start another Pi
 

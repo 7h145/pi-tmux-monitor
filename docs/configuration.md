@@ -50,7 +50,7 @@ Times are positive integer milliseconds, up to 2,147,483,647.
 | `staleAfterMs` | `15000` | How long a source may go without an advancing report before it is no longer trusted; also the old-scan notice threshold |
 | `tmuxTimeoutMs` | `1000` | Timeout for each tmux operation, not the entire inventory scan |
 | `activeTheme` | `"default"` | Display theme name |
-| `summaryOrder` | failed, active, idle, running, success, unknown, unregistered | State order in a complete count summary |
+| `summaryOrder` | failed, active, idle, running, success, unknown, unregistered | Presentation-state order in whole-set summaries and local hybrid groups |
 | `partialOrder` | failed, active, unknown, unregistered, running, idle, success | Priority when only part of the count summary fits |
 | `themes` | Built-in `default` theme | Named symbol/color definitions |
 
@@ -110,8 +110,9 @@ configured to look elsewhere.
 ### Themes
 
 Each theme defines `overflow` (default `…`), `summarySeparator` (default `|`)
-and a `states` object. The separator marks local summary boundaries, not omission. Each state
-has a `glyph` and `fg` color. For example, this changes only the active
+and a `states` object. The separator marks local summary boundaries, not omission;
+change it under `themes.<name>.summarySeparator`, not at the top level. Each
+state has a `glyph` and `fg` color. For example, this changes only the active
 symbol's color in the built-in theme:
 
 ```json
@@ -133,12 +134,20 @@ Set `activeTheme` to a name you have defined; merely choosing `gaudy`
 without adding its definition does not enable the example theme.
 
 All symbols, including overflow and the summary separator, must be distinct
-within the theme. Each
-must be one grapheme occupying one terminal column, not a number,
-whitespace or a control character. `fg` is a semantic Pi theme color such
+within the theme. Each must be one grapheme occupying one terminal column,
+not a number, whitespace or a control character. `fg` is a semantic Pi theme color such
 as `accent`, `warning`, `success` or `dim`, or `null` for no foreground
 styling—not an RGB value or ANSI escape string. See
 [`src/config.mts`](../src/config.mts) for the accepted Pi color tokens.
+
+State foregrounds style confirmed presentations. Uncertain glyphs use Pi's
+`dim` foreground instead, even when the state's `fg` is another color or `null`.
+A count token is dim if any counted member is uncertain. This uncertainty
+foreground is not a separate configuration setting.
+
+The hybrid view collapses consecutive runs of at least six success/failed
+presentation slots. That threshold is fixed; there is no monitor-width or
+job-count-limit setting. The compositor supplies the render-time column budget.
 
 The display uses Pi's current theme colors. Width-aware rendering picks
 up theme changes at render time; static fallback text updates on the next

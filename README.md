@@ -141,8 +141,8 @@ exist.
 | `/tmux-monitor tmux start` | `t start` | Start or reuse the project server and shell session |
 
 Shortcuts follow `/tmux-monitor`; for example, `/tmux-monitor h`.
-Only `tmux start` creates resources. These commands display notices in Pi;
-they do not make model requests or send their output to the agent.
+Among these slash commands, only `tmux start` creates resources. They display
+notices in Pi; they do not make model requests or send their output to the agent.
 
 ### Optional: a width-aware footer
 
@@ -167,6 +167,9 @@ width and may be clipped. A custom footer may also keep the fallback
 rather than support the width-aware display.
 
 ## Reading the indicator
+
+These are the default glyphs. Missing reporting can qualify a glyph as last-known,
+as explained below.
 
 | Symbol | State | What it means |
 | --- | --- | --- |
@@ -193,7 +196,12 @@ can take about seven seconds to be confirmed; `?` during that time is
 normal. Reports that have not advanced for 15 seconds are no longer trusted.
 When reporting disappears, the footer retains the last confirmed symbol in dim
 color: it means **last reported**, not confirmed current activity. Without any
-confirmed history it shows a dim `?`. Normal idle `_` also uses dim color.
+confirmed history it shows a dim `?`. `_` is always dim.
+
+Counts use those same presentation states. If any member of a count token is
+uncertain, the entire token, including its number, is dim. Reporting loss or
+recovery alone does not expand a compressed group or move its members to `?`;
+a confirmed state change or workload replacement can change the grouping.
 
 Status's State column and diagnostics describe current evidence: a fresh command
 report may establish running even while the glyph retains uncertain Pi activity.
@@ -207,10 +215,10 @@ pane's individual footer presentation; State describes current evidence. State
 definitions and the uncertainty convention are explained once in help, not on
 every row. Narrow notices show the same fields vertically.
 
-Generated workspace names appear in status as seven-character hash references,
-extended only when needed to avoid collisions. A mapping below the table gives
-each complete session name once. Window IDs and window/pane indexes are unchanged;
-custom session names remain literal. These references are for display, never
+Generated default workspace names appear in status as seven-character hash
+references, extended only when needed to avoid collisions. A mapping below the
+table gives each complete session name once. Window IDs and window/pane indexes
+stay unchanged. Custom session names remain literal. These references are for display, never
 attachment targets or ownership evidence.
 
 ## Starting tasks from a shell
@@ -328,8 +336,9 @@ Start with **`/tmux-monitor diagnostics`** and **`/tmux-monitor help`**.
   Launch monitored tasks or deliberately choose `scope: "server"`.
 - **No project server exists:** use `/tmux-monitor tmux start` if you want
   a shell, or launch a task. Viewing status does not create a server.
-- **A task shows `?`:** allow time for its first reports. If it stays
-  unknown, check diagnostics for lost reporting or connection errors.
+- **A task shows `?` or a dimmed last-known symbol:** allow time for first
+  reports, then check State and diagnostics for missing reporting or connection
+  errors. A retained symbol is not proof of current activity.
 - **The indicator is clipped or missing:** check the compositor setup and
   available footer space. `/tmux-monitor` still lists the monitored panes
   even when the footer cannot fit them.

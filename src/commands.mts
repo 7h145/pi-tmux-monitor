@@ -193,7 +193,7 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
     strong(ctx, "Notes:"),
     " • tmux-monitor never controls workloads or attaches to a tmux session.",
     " • Status shows cached data, refreshed automatically in the background.",
-    " • Dim glyphs may be last-known or unconfirmed; State reports current evidence. Normal idle glyphs are also dim.",
+    " • Dim glyphs may be last-known or unconfirmed; State reports current evidence.",
   ].join("\n");
 }
 

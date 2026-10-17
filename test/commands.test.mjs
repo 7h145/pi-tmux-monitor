@@ -214,7 +214,7 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
     assert.deepEqual(plain.split("Notes:\n")[1].split("\n"), [
       " • tmux-monitor never controls workloads or attaches to a tmux session.",
       " • Status shows cached data, refreshed automatically in the background.",
-      " • Dim glyphs may be last-known or unconfirmed; State reports current evidence. Normal idle glyphs are also dim.",
+      " • Dim glyphs may be last-known or unconfirmed; State reports current evidence.",
     ]);
     assert.notEqual(
       commandHelp({ ...ctx, ui: { theme: theme(35) } }, data, inspected, 140),
