@@ -122,7 +122,7 @@ test("status rows preserve every full-strip state and snapshot order, not footer
   );
   const rows = text
     .split("\n")
-    .filter((line) => /^│ %/.test(line))
+    .filter((line) => /^│[^│]*│ %/.test(line))
     .map((line) =>
       line
         .split("│")
@@ -132,13 +132,12 @@ test("status rows preserve every full-strip state and snapshot order, not footer
   assert.equal(rows.length, 7);
   for (const [i, state] of STATES.entries()) {
     assert.deepEqual(rows[i], [
+      DEFAULTS.themes.default.states[state].glyph,
       `%${i}`,
       `owned / @${i} (${i}.0)`,
       `work-${i}`,
       "batch",
       state,
-      DEFAULTS.themes.default.states[state].glyph,
-      STATE_DEFINITIONS[state],
     ]);
   }
   runtime.observer.slots.reverse();
@@ -248,7 +247,7 @@ test("tables escape labels/glyphs and mark missing identity, configuration and i
   assert.ok(text.includes("unavailable"));
   assert.ok(!text.includes("\x1b"));
   assert.equal(
-    text.split("\n").filter((line) => line.startsWith("│ %")).length,
+    text.split("\n").filter((line) => /^│[^│]*│ %/.test(line)).length,
     1,
   );
   for (const [observer, expected] of [
@@ -361,4 +360,72 @@ test("a late help lookup cannot notify a retired or replaced runtime", async () 
   release({ reason: "No target", hint: "Prefix+s" });
   await working;
   assert.deepEqual(messages, []);
+});
+
+test("status has Glyph first without repeated meanings, while retaining every hybrid-group member", () => {
+  const runtime = current();
+  runtime.observer.slots = Array.from({ length: 6 }, (_, i) => ({
+    ...runtime.observer.slots[0],
+    paneId: `%${i}`,
+    state: "success",
+  }));
+  const data = collectSnapshot(runtime);
+  assert.equal(format(data.slots, DEFAULTS, ctx.ui.theme, 100).mode, "hybrid");
+  const text = stripTerminalSequences(statusText(ctx, data, 240));
+  assert.ok(text.includes("│ Glyph"), text);
+  assert.equal(
+    text.split("\n").filter((line) => /^│[^│]*│ %/.test(line)).length,
+    6,
+  );
+  assert.ok(!text.includes("Meaning"));
+  for (const definition of Object.values(STATE_DEFINITIONS))
+    assert.ok(!text.includes(definition));
+  for (const width of [40, 45]) {
+    const stacked = stripTerminalSequences(statusText(ctx, data, width));
+    const fields = [
+      "Glyph:",
+      "Pane:",
+      "Location:",
+      "Label:",
+      "Kind:",
+      "State:",
+    ];
+    assert.ok(
+      fields.every(
+        (f, i) =>
+          i === 0 || stacked.indexOf(f) > stacked.indexOf(fields[i - 1]),
+      ),
+    );
+    assert.equal(
+      stacked.split("\n").filter((line) => line.startsWith("Glyph:")).length,
+      6,
+    );
+  }
+});
+test("row glyphs follow last-known presentation while State stays truthful", () => {
+  const runtime = current();
+  runtime.observer.slots = [
+    {
+      ...runtime.observer.slots[0],
+      state: "running",
+      presentationState: "active",
+      uncertain: true,
+    },
+  ];
+  const text = stripTerminalSequences(
+    statusText(ctx, collectSnapshot(runtime), 240),
+  );
+  const row = text.split("\n").find((line) => /^│[^│]*│ %/.test(line));
+  const cells = row
+    .split("│")
+    .slice(1, -1)
+    .map((s) => s.trim());
+  assert.deepEqual(cells, [
+    "A",
+    "%0",
+    "owned / @0 (0.0)",
+    "work-0",
+    "batch",
+    "running",
+  ]);
 });

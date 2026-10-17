@@ -313,7 +313,7 @@ for (const [mode, activeTheme, producerFirst] of [
         await until(async () => (await snapshot()).includes("Glyph:"));
         output = await snapshot();
         assert.ok(
-          output.includes("Pane:") && output.includes("Meaning:"),
+          output.includes("Pane:") && output.includes("State:"),
           output,
         );
         assert.ok(!output.includes("| --- |"), output);

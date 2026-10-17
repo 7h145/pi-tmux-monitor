@@ -201,6 +201,11 @@ If the connection is lost, cached tasks remain visible with uncertain live glyph
 known command exits remain confirmed. The status view warns when its last
 successful scan is old.
 
+Status columns are Glyph, Pane, Location, Label, Kind and State. Glyph is the
+pane's individual footer presentation; State describes current evidence. State
+definitions and the uncertainty convention are explained once in help, not on
+every row. Narrow notices show the same fields vertically.
+
 Generated workspace names appear in status as seven-character hash references,
 extended only when needed to avoid collisions. A mapping below the table gives
 each complete session name once. Window IDs and window/pane indexes are unchanged;

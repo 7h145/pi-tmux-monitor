@@ -79,7 +79,7 @@ test("table wraps without dropping rows or fields and stacks below its usable wi
       `width ${width}`,
     );
     assert.ok(!plain.includes("| ---"), `width ${width}`);
-    if (width >= 10 && width < 50) {
+    if (width >= 10 && width < 60) {
       assert.equal(
         plain.split("\n").filter((line) => line.startsWith("Pane:")).length,
         2,
@@ -91,7 +91,7 @@ test("table wraps without dropping rows or fields and stacks below its usable wi
       assert.ok(plain.includes("%10") && plain.includes("%11"));
       assert.ok(plain.includes("🙂"));
     }
-    if (width >= 50) assert.ok(plain.includes("┌") && plain.includes("└"));
+    if (width >= 60) assert.ok(plain.includes("┌") && plain.includes("└"));
   }
 });
 

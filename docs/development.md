@@ -160,7 +160,11 @@ Preserve `fullSummary()` for static fallback if replacing the formatter.
 Slash commands accept complete lowercase words, whitespace around/between
 them and the aliases listed in the README. `s` means status at either level;
 `start` has no abbreviation. `up`, shutdown commands and extra arguments
-are rejected. Status uses cached rows; server commands make fresh checks. Generated default
+are rejected. Status uses cached rows with Glyph first, followed by Pane, Location, Label,
+Kind and evidence State. It never aggregates rows or repeats a Meaning column.
+Tables stack fields when their headers cannot fit legibly; glyph cells preserve
+trusted theme styling while metadata remains literal. Server commands make fresh
+checks. Generated default
 workspace names use invocation-local unique hash prefixes, starting at seven
 characters, with full-name mappings below the table. Custom names remain literal.
 These references never rename sessions, establish ownership or become targets.

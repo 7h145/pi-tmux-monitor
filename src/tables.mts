@@ -1,5 +1,10 @@
 // @ts-nocheck
-import { Markdown, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import {
+  Markdown,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 
 // Notifications are plain Text, not Markdown components. Render before sending
@@ -39,7 +44,14 @@ export function renderTable(ctx, headers, rows, width = noticeWidth()) {
     cell.fg === null ? cell.text : ctx.ui.theme.fg(cell.fg, cell.text);
   // A cramped multi-column table is harder to read than labelled fields. This
   // also avoids Markdown's raw-source fallback when borders cannot fit.
-  if (width < 7 * headers.length + 1) {
+  const minimum =
+    headers.reduce(
+      (sum, header) => sum + Math.max(4, visibleWidth(literalCell(header))),
+      0,
+    ) +
+    3 * headers.length +
+    1;
+  if (width < minimum) {
     return rows
       .map((row) =>
         new Text(

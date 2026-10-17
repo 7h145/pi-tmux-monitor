@@ -90,13 +90,8 @@ export function statusText(ctx, data, width = noticeWidth()) {
       "",
       renderTable(
         ctx,
-        ["Pane", "Location", "Label", "Kind", "State", "Glyph", "Meaning"],
+        ["Glyph", "Pane", "Location", "Label", "Kind", "State"],
         data.slots.map((p) => [
-          p.paneId ?? "unavailable",
-          `${p.sessions?.map((s) => references.get(s.name) ?? "unavailable").join(", ") || "unavailable"} / ${p.windowId ?? "unavailable"} (${p.windowIndex ?? "unavailable"}.${p.paneIndex ?? "unavailable"})`,
-          p.workload?.label || "unavailable",
-          p.workload?.kind ?? "unavailable",
-          p.state,
           themedCell(
             glyph(data, presentationState(p)),
             (p.uncertain ?? p.state === "unknown")
@@ -105,7 +100,11 @@ export function statusText(ctx, data, width = noticeWidth()) {
                   presentationState(p)
                 ]?.fg ?? null),
           ),
-          STATE_DEFINITIONS[p.state] ?? "unavailable",
+          p.paneId ?? "unavailable",
+          `${p.sessions?.map((s) => references.get(s.name) ?? "unavailable").join(", ") || "unavailable"} / ${p.windowId ?? "unavailable"} (${p.windowIndex ?? "unavailable"}.${p.paneIndex ?? "unavailable"})`,
+          p.workload?.label || "unavailable",
+          p.workload?.kind ?? "unavailable",
+          p.state,
         ]),
         width,
       ),
