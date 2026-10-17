@@ -201,6 +201,12 @@ If the connection is lost, cached tasks remain visible with uncertain live glyph
 known command exits remain confirmed. The status view warns when its last
 successful scan is old.
 
+Generated workspace names appear in status as seven-character hash references,
+extended only when needed to avoid collisions. A mapping below the table gives
+each complete session name once. Window IDs and window/pane indexes are unchanged;
+custom session names remain literal. These references are for display, never
+attachment targets or ownership evidence.
+
 ## Starting tasks from a shell
 
 You do not have to ask Pi to launch every command. The package includes

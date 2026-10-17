@@ -160,7 +160,10 @@ Preserve `fullSummary()` for static fallback if replacing the formatter.
 Slash commands accept complete lowercase words, whitespace around/between
 them and the aliases listed in the README. `s` means status at either level;
 `start` has no abbreviation. `up`, shutdown commands and extra arguments
-are rejected. Status uses cached rows; server commands make fresh checks.
+are rejected. Status uses cached rows; server commands make fresh checks. Generated default
+workspace names use invocation-local unique hash prefixes, starting at seven
+characters, with full-name mappings below the table. Custom names remain literal.
+These references never rename sessions, establish ownership or become targets.
 Only full `tmux start` creates resources. No command forces an inventory
 scan, modifies settings, requests a model turn or inserts its notice into
 the conversation.

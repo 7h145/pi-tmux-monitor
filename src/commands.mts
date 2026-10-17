@@ -3,6 +3,7 @@
 import { STATES, STATE_DEFINITIONS } from "./protocol.mts";
 import { installationLabel } from "./version.mts";
 import { inspectionHint } from "./inspection.mts";
+import { workspaceReferences } from "./workspaces.mts";
 import { presentationState } from "./formatter.mts";
 import { STATUS_KEY } from "./footer.mts";
 import { serverCommand } from "./server.mts";
@@ -64,6 +65,7 @@ const glyph = (data, state) =>
 
 export function statusText(ctx, data, width = noticeWidth()) {
   const count = data.slots.length;
+  const { references, mappings } = workspaceReferences(data.slots);
   const lines = [
     `${strong(ctx, `${installationLabel(data.identity)}:`)} ${count} monitored pane${count === 1 ? "" : "s"}.`,
     `Scope: ${data.config?.scope ?? "unavailable"}. Observation: ${data.health}.`,
@@ -91,7 +93,7 @@ export function statusText(ctx, data, width = noticeWidth()) {
         ["Pane", "Location", "Label", "Kind", "State", "Glyph", "Meaning"],
         data.slots.map((p) => [
           p.paneId ?? "unavailable",
-          `${p.sessions?.map((s) => s.name ?? "unavailable").join(", ") || "unavailable"} / ${p.windowId ?? "unavailable"} (${p.windowIndex ?? "unavailable"}.${p.paneIndex ?? "unavailable"})`,
+          `${p.sessions?.map((s) => references.get(s.name) ?? "unavailable").join(", ") || "unavailable"} / ${p.windowId ?? "unavailable"} (${p.windowIndex ?? "unavailable"}.${p.paneIndex ?? "unavailable"})`,
           p.workload?.label || "unavailable",
           p.workload?.kind ?? "unavailable",
           p.state,
@@ -106,6 +108,15 @@ export function statusText(ctx, data, width = noticeWidth()) {
           STATE_DEFINITIONS[p.state] ?? "unavailable",
         ]),
         width,
+      ),
+    );
+  if (count && mappings.length)
+    lines.push(
+      "",
+      strong(ctx, "Workspaces:"),
+      ...mappings.map(
+        ({ reference, name }) =>
+          ` [${literalCell(reference)}]: ${literalCell(name)}`,
       ),
     );
   lines.push(
