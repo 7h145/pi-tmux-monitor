@@ -42,6 +42,13 @@ export function renderTable(ctx, headers, rows, width = noticeWidth()) {
   const muted = (text) => ctx.ui.theme.fg("muted", text);
   const styled = (cell) =>
     cell.fg === null ? cell.text : ctx.ui.theme.fg(cell.fg, cell.text);
+  // Pipes sit outside code spans; paint them separately so code styling does
+  // not reset their foreground.
+  const styledCode = (cell) =>
+    cell.text
+      .split("|")
+      .map((part) => (part ? codeCell(styled({ ...cell, text: part })) : ""))
+      .join(styled({ ...cell, text: "\\|" }));
   // A cramped multi-column table is harder to read than labelled fields. This
   // also avoids Markdown's raw-source fallback when borders cannot fit.
   const minimum =
@@ -73,7 +80,7 @@ export function renderTable(ctx, headers, rows, width = noticeWidth()) {
   }
   const sourceRows = [headers, ...rows].map(
     (row) =>
-      `| ${row.map((cell) => (cell?.[THEMED] ? codeCell(styled(cell)) : tableCell(cell))).join(" | ")} |`,
+      `| ${row.map((cell) => (cell?.[THEMED] ? styledCode(cell) : tableCell(cell))).join(" | ")} |`,
   );
   sourceRows.splice(1, 0, `| ${headers.map(() => "---").join(" | ")} |`);
   const markdown = sourceRows.join("\n");

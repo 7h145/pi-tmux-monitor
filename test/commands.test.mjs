@@ -176,7 +176,7 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
     const data = collectSnapshot(current(config));
     const inspected = {
       command: "tmux -S '.agents/run/socket' attach -t '$0'",
-      hint: "In tmux: Ctrl+b (or Alt+x), then s opens the session tree and pane previews.",
+      prefixes: ["Ctrl+b", "Alt+x"],
     };
     const output = commandHelp(ctx, data, inspected, 140);
     const plain = stripTerminalSequences(output);
@@ -205,7 +205,7 @@ test("human help is focused, themed and uses the active glyphs and shared meanin
     }
     assert.ok(
       plain.includes(
-        `Run from the project root:\n\n ${inspected.command}\n\n${inspected.hint}`,
+        `Run from the project root:\n\n ${inspected.command}\n\nIn tmux:\n • Ctrl+b (or Alt+x), then s opens the session tree and pane previews.\n • Ctrl+b (or Alt+x), then d detaches without ending the session.`,
       ),
     );
     assert.ok(!plain.includes("choose-tree"));
@@ -270,12 +270,13 @@ test("tables escape labels/glyphs and mark missing identity, configuration and i
   }
   const data = collectSnapshot(undefined);
   const help = stripTerminalSequences(
-    commandHelp(ctx, data, { reason: "No target", hint: "Prefix+s" }),
+    commandHelp(ctx, data, { reason: "No target", prefixes: null }),
   );
   assert.ok(help.includes("active configuration unavailable"));
-  assert.ok(help.includes("Terminal inspection:\nNo target\n\nNotes:"));
+  assert.ok(help.includes("Terminal inspection:\nNo target\n\nIn tmux:"));
   assert.ok(!help.includes("Prefix+s"));
-  assert.ok(!help.includes("In tmux:"));
+  assert.ok(help.includes("Prefix, then s"));
+  assert.ok(help.includes("Prefix, then d"));
   assert.ok(help.startsWith("tmux-monitor:"));
   assert.ok(!help.includes(" v"));
 });
@@ -299,7 +300,7 @@ test("one read-only output per command, config/diagnostics separation, no forced
     }),
     async () => {
       inspections++;
-      return { reason: "No target", hint: "Prefix+s" };
+      return { reason: "No target", prefixes: null };
     },
   );
   for (const args of [
@@ -357,7 +358,7 @@ test("a late help lookup cannot notify a retired or replaced runtime", async () 
   });
   runtime.retired = true;
   runtime = current();
-  release({ reason: "No target", hint: "Prefix+s" });
+  release({ reason: "No target", prefixes: null });
   await working;
   assert.deepEqual(messages, []);
 });
@@ -428,4 +429,39 @@ test("row glyphs follow last-known presentation while State stays truthful", () 
     "batch",
     "running",
   ]);
+});
+
+test("help repeats configured prefixes for inspection/detach and handles unknown or disabled keys", () => {
+  const data = collectSnapshot(current());
+  for (const [prefixes, prefix] of [
+    [["Ctrl+c", "Alt+x"], "Ctrl+c (or Alt+x)"],
+    [["Alt+x"], "Alt+x"],
+    [null, "Prefix"],
+  ]) {
+    const text = stripTerminalSequences(
+      commandHelp(ctx, data, {
+        command: "tmux -S '.agents/run/socket' attach -t '$17'",
+        prefixes,
+      }),
+    );
+    assert.ok(
+      text.includes(
+        ` • ${prefix}, then s opens the session tree and pane previews.`,
+      ),
+    );
+    assert.ok(
+      text.includes(
+        ` • ${prefix}, then d detaches without ending the session.`,
+      ),
+    );
+    assert.ok(text.includes("attach -t '$17'"));
+    assert.ok(!text.includes("pi-workspace-"));
+    assert.ok(!text.includes("Prefix+:") && !text.includes("choose-tree"));
+    if (!prefixes) assert.ok(!text.includes("Ctrl+b"));
+  }
+  const disabled = stripTerminalSequences(
+    commandHelp(ctx, data, { reason: "No target", prefixes: [] }),
+  );
+  assert.ok(disabled.includes("Both tmux prefixes are disabled"));
+  assert.ok(!disabled.includes("then s") && !disabled.includes("then d"));
 });

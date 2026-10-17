@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { visibleWidth } from "@earendil-works/pi-tui";
 // Pure presentation: slots (creation order), resolved config, current Pi theme,
-// allocated columns -> {text, mode}. See README's formatter contract.
+// allocated columns -> {text, mode}. See docs/development.md for the contract.
 export const presentationState = (slot) => slot.presentationState ?? slot.state;
 const style = (state, config, theme, uncertain = false, count = 1) => {
   const s = config.themes[config.activeTheme].states[state];

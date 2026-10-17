@@ -33,7 +33,7 @@ export async function inspectionHint(
   cwd,
   factory = (socket, timeout) => new Tmux(socket, timeout),
 ) {
-  const unavailable = (reason) => ({ reason });
+  const unavailable = (reason) => ({ reason, prefixes: null });
   if (!current?.config)
     return unavailable(
       "No verified attachment target; configuration is unavailable.",
@@ -123,7 +123,7 @@ export async function inspectionHint(
     );
   }
   const command = attachmentCommand(socket, cwd, target);
-  let hint = "In tmux: Prefix+s opens the session tree and pane previews.";
+  let prefixes = null;
   try {
     // Prefixes inherit session/global settings; unlike registrations, use -A.
     const keys = await Promise.all(
@@ -131,12 +131,9 @@ export async function inspectionHint(
         tmux.call("show-options", "-A", "-v", "-t", target, option),
       ),
     );
-    const prefixes = [...new Set(keys.map(readablePrefix).filter(Boolean))];
-    hint = prefixes.length
-      ? `In tmux: ${prefixes[0]}${prefixes[1] ? ` (or ${prefixes[1]})` : ""}, then s opens the session tree and pane previews.`
-      : "Both tmux prefixes are disabled; Prefix+s is unavailable.";
+    prefixes = [...new Set(keys.map(readablePrefix).filter(Boolean))];
   } catch {
     /* Keep the generic hint; never claim a default key was configured. */
   }
-  return { command, hint };
+  return { command, prefixes };
 }

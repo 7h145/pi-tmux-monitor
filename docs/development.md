@@ -182,7 +182,11 @@ label.
 Help verifies a foreground tmux session first, otherwise one associated
 owned session in cached observation. It does not guess on ambiguity. Its
 read-only prefix lookup uses the session's effective `prefix` and `prefix2`,
-falling back to generic guidance if lookup fails. It never attaches.
+falling back to generic guidance if lookup fails. Help repeats the readable
+prefix(es) in separate session-tree (`s`) and detach (`d`) bullets. Disabled
+prefixes are omitted; if both are disabled, help explains that these shortcuts
+are unavailable. Attachment uses an exact session ID without repeating the long
+workspace name. It never attaches.
 
 For integrations that launch work, call the
 [documented script](launching.md) with current Pi settings. Its response

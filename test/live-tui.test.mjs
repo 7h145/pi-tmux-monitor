@@ -12,9 +12,10 @@ import {
 import { join } from "node:path";
 import { Tmux } from "../src/tmux.mts";
 import { parseCLI, launch } from "../src/launch.mts";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { compositorSource } from "./compositor-source.mjs";
 import { STATUS_KEY } from "../src/footer.mts";
+import { job, reporter } from "./fixtures.mjs";
 const source = await compositorSource();
 const available = source !== null;
 async function until(fn) {
@@ -288,6 +289,105 @@ for (const [mode, activeTheme, producerFirst] of [
           !output.includes("| --- |") && !output.includes("\\_"),
           output,
         );
+        // Real TUI rendering, not just width probes: compare confirmed and
+        // uncertain activity in the actual dark/light Pi themes, without a model.
+        const previewUncertainty = async (name, activity = "active") => {
+          const syntheticJob = job({
+            paneId: "%0",
+            jobId: "style-" + name,
+            ownerSessionId: first.sessionId,
+            ancestors: [first.sessionId],
+            kind: "interactive",
+            runtime: "pi",
+          });
+          const syntheticPi = reporter({
+            paneId: "%0",
+            jobId: syntheticJob.jobId,
+            parentSessionId: first.sessionId,
+            ancestors: [first.sessionId],
+            kind: "interactive",
+            state: activity,
+          });
+          const active = config.themes[activeTheme].states[activity].glyph;
+          const unknown = config.themes[activeTheme].states.unknown.glyph;
+          const suffix = `${active}${outcome} • clean • C W2% • dyn`;
+          const rawLine = async () =>
+            (await tmux.call("capture-pane", "-p", "-e", "-t", pane))
+              .split("\n")
+              .find((line) =>
+                stripTerminalSequences(line).trimEnd().endsWith(suffix),
+              );
+          await tmux.write("job", "%0", syntheticJob);
+          await tmux.write("pi", "%0", syntheticPi);
+          await until(async () =>
+            (await snapshot()).includes(`${unknown}${outcome} • clean`),
+          );
+          syntheticJob.heartbeatSeq++;
+          syntheticPi.heartbeatSeq++;
+          await tmux.write("job", "%0", syntheticJob);
+          await tmux.write("pi", "%0", syntheticPi);
+          const confirmed = await until(rawLine);
+          if (activity === "idle") {
+            // The dim-first candidate deliberately shares normal idle's color.
+            // Confirm expiry through diagnostics, not a nonexistent color change.
+            await new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                config.staleAfterMs + 2 * config.pollIntervalMs,
+              ),
+            );
+          } else {
+            const uncertain = await until(async () => {
+              const line = await rawLine();
+              return line && line !== confirmed ? line : null;
+            });
+            assert.equal(
+              stripTerminalSequences(uncertain),
+              stripTerminalSequences(confirmed),
+            );
+          }
+          assert.ok(
+            !(await snapshot())
+              .split("\n")
+              .some((line) =>
+                line.trim().startsWith("No fresh application state"),
+              ),
+          );
+          await tmux.call(
+            "send-keys",
+            "-t",
+            pane,
+            "/tmux-monitor diagnostics",
+            "Enter",
+          );
+          await until(async () => {
+            const text = await snapshot();
+            return (
+              text.includes(`"presentationState": "${activity}"`) &&
+              text.includes('"uncertain": true')
+            );
+          });
+          if (activity === "idle") assert.equal(await rawLine(), confirmed);
+          await tmux.call(
+            "set-option",
+            "-p",
+            "-u",
+            "-t",
+            "%0",
+            "@pi-tmux-monitor-job",
+          );
+          await tmux.call(
+            "set-option",
+            "-p",
+            "-u",
+            "-t",
+            "%0",
+            "@pi-tmux-monitor-pi",
+          );
+          await placement(100);
+        };
+        await previewUncertainty("dark-active");
+        await previewUncertainty("dark-idle", "idle");
         const rawBefore = await tmux.call(
           "capture-pane",
           "-p",
@@ -307,6 +407,8 @@ for (const [mode, activeTheme, producerFirst] of [
           await tmux.call("capture-pane", "-p", "-e", "-t", pane),
           rawBefore,
         );
+        await previewUncertainty("light-active");
+        await previewUncertainty("light-idle", "idle");
         await tmux.call("resize-window", "-t", pane, "-x", "45", "-y", "24");
         await placement(45);
         await tmux.call("send-keys", "-t", pane, "/tmux-monitor s", "Enter");

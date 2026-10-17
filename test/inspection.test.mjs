@@ -49,10 +49,9 @@ test("prefix notation, disabled and duplicate keys are not invented defaults", (
 
 test("outside tmux: exact owned-session verification, relative path, quoting and effective prefixes", async () =>
   fixture(async ({ cwd, tmux, current }) => {
-    assert.ok(
-      (await inspectionHint(current, cwd, () => tmux)).hint.startsWith(
-        "In tmux: Ctrl+b, then s",
-      ),
+    assert.deepEqual(
+      (await inspectionHint(current, cwd, () => tmux)).prefixes,
+      ["Ctrl+b"],
     );
     await tmux.call("set-option", "-g", "prefix", "C-b");
     await tmux.call("set-option", "-t", "$0", "prefix", "C-c");
@@ -65,10 +64,7 @@ test("outside tmux: exact owned-session verification, relative path, quoting and
     };
     const result = await inspectionHint(current, cwd, () => tmux);
     assert.equal(result.command, `tmux -S '.agents/run/socket' attach -t '$0'`);
-    assert.equal(
-      result.hint,
-      "In tmux: Ctrl+c (or Alt+x), then s opens the session tree and pane previews.",
-    );
+    assert.deepEqual(result.prefixes, ["Ctrl+c", "Alt+x"]);
     assert.ok(
       calls.every((args) =>
         ["display-message", "show-options"].includes(args[0]),
@@ -85,14 +81,15 @@ test("outside tmux: exact owned-session verification, relative path, quoting and
     );
     assert.ok(fromParent.command.includes("'\\''"));
     await tmux.call("set-option", "-t", "$0", "prefix2", "C-c");
-    assert.ok(
-      !(await inspectionHint(current, cwd, () => tmux)).hint.includes("or"),
+    assert.deepEqual(
+      (await inspectionHint(current, cwd, () => tmux)).prefixes,
+      ["Ctrl+c"],
     );
     await tmux.call("set-option", "-t", "$0", "prefix", "None");
     await tmux.call("set-option", "-t", "$0", "prefix2", "None");
-    assert.equal(
-      (await inspectionHint(current, cwd, () => tmux)).hint,
-      "Both tmux prefixes are disabled; Prefix+s is unavailable.",
+    assert.deepEqual(
+      (await inspectionHint(current, cwd, () => tmux)).prefixes,
+      [],
     );
   }));
 
@@ -127,7 +124,7 @@ test("absent, ambiguous and changed session ownership yield no fabricated target
     };
     const unavailable = await inspectionHint(noSlots, cwd);
     assert.ok(unavailable.reason.includes("No associated"));
-    assert.equal(unavailable.hint, undefined);
+    assert.equal(unavailable.prefixes, null);
     await tmux.call("new-session", "-d", "-s", "another");
     await tmux.write("owner", "$1", {
       v: 1,
@@ -168,8 +165,21 @@ test("prefix lookup failure retains a verified attachment command with only a ge
         : call(...args);
     const result = await inspectionHint(current, cwd, () => tmux);
     assert.ok(result.command);
-    assert.equal(
-      result.hint,
-      "In tmux: Prefix+s opens the session tree and pane previews.",
+    assert.equal(result.prefixes, null);
+  }));
+
+test("a secondary-only prefix and a generated name still yield a short exact-ID attachment", async () =>
+  fixture(async ({ cwd, tmux, current }) => {
+    await tmux.call(
+      "rename-session",
+      "-t",
+      "$0",
+      "pi-workspace-" + "a".repeat(64),
     );
+    await tmux.call("set-option", "-t", "$0", "prefix", "None");
+    await tmux.call("set-option", "-t", "$0", "prefix2", "M-x");
+    const result = await inspectionHint(current, cwd, () => tmux);
+    assert.deepEqual(result.prefixes, ["Alt+x"]);
+    assert.equal(result.command, "tmux -S '.agents/run/socket' attach -t '$0'");
+    assert.ok(!result.command.includes("pi-workspace"));
   }));

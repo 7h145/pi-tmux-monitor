@@ -160,3 +160,23 @@ test("trusted glyph styling survives wide and narrow tables while metadata stays
   assert.ok(text.includes("\x1b[90mA"), text);
   assert.ok(stripTerminalSequences(text).includes("unknown"));
 });
+
+test("themed markup glyphs, including a pipe, keep their foreground through Markdown", () => {
+  const ctx = { ui: { theme } };
+  const symbols = ["|", "`", "*", "_"];
+  const text = renderTable(
+    ctx,
+    ["Glyph"],
+    symbols.map((s) => [themedCell(s, "dim")]),
+    100,
+  );
+  for (const symbol of symbols)
+    assert.ok(text.includes(`\x1b[90m${symbol}\x1b[39m`), JSON.stringify(text));
+  const plain = stripTerminalSequences(text);
+  const cells = plain
+    .split("\n")
+    .filter((line) => line.startsWith("│ "))
+    .slice(1)
+    .map((line) => line.slice(2, line.lastIndexOf(" │")).trim());
+  assert.deepEqual(cells, symbols);
+});

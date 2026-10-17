@@ -102,7 +102,8 @@ keys. When it can identify the right session, help prints a command you
 can run in another terminal. If the session is ambiguous or unavailable,
 it explains that instead of guessing. It never attaches for you.
 
-Once attached, press **Prefix, then s** to open tmux's session/window tree
+Once attached, press **Prefix, then d** to detach without ending the session or
+its workloads. Press **Prefix, then s** to open tmux's session/window tree
 with previews. The default is **Ctrl+b, then s**, but your settings may
 use another prefix. Input, interrupts and cleanup remain ordinary tmux
 operations; check that you are acting on the intended task.

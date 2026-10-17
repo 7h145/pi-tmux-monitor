@@ -128,6 +128,19 @@ export function statusText(ctx, data, width = noticeWidth()) {
 export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
   const command = (syntax, description) =>
     `  ${strong(ctx, syntax)}${" ".repeat(Math.max(2, 34 - syntax.length))}${description}`;
+  const prefixes = inspection.prefixes;
+  const prefix = prefixes?.length
+    ? `${prefixes[0]}${prefixes[1] ? ` (or ${prefixes[1]})` : ""}`
+    : "Prefix";
+  const shortcuts =
+    prefixes?.length === 0
+      ? [
+          "Both tmux prefixes are disabled; these prefix-key shortcuts are unavailable.",
+        ]
+      : [
+          ` • ${prefix}, then s opens the session tree and pane previews.`,
+          ` • ${prefix}, then d detaches without ending the session.`,
+        ];
   return [
     `${strong(ctx, `${installationLabel(data.identity)}:`)} tmux workload awareness.`,
     "",
@@ -171,14 +184,11 @@ export function commandHelp(ctx, data, inspection, width = noticeWidth()) {
     "",
     strong(ctx, "Terminal inspection:"),
     ...(inspection.command
-      ? [
-          "Run from the project root:",
-          "",
-          ` ${inspection.command}`,
-          "",
-          inspection.hint,
-        ]
+      ? ["Run from the project root:", "", ` ${inspection.command}`]
       : [inspection.reason]),
+    "",
+    strong(ctx, "In tmux:"),
+    ...shortcuts,
     "",
     strong(ctx, "Notes:"),
     " • tmux-monitor never controls workloads or attaches to a tmux session.",
