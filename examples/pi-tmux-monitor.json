@@ -34,7 +34,7 @@
       "states": {
         "idle": {
           "glyph": "_",
-          "fg": "dim"
+          "fg": "text"
         },
         "active": {
           "glyph": "A",
@@ -68,7 +68,7 @@
       "states": {
         "idle": {
           "glyph": "·",
-          "fg": "dim"
+          "fg": "text"
         },
         "active": {
           "glyph": "●",

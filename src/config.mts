@@ -11,7 +11,9 @@ export const DEFAULT_THEME = {
       s,
       {
         glyph: ["_", "A", "R", "+", "!", "?", ":"][i],
-        fg: ["dim", "accent", "muted", "success", "error", "warning", "dim"][i],
+        fg: ["text", "accent", "muted", "success", "error", "warning", "dim"][
+          i
+        ],
       },
     ]),
   ),

@@ -196,7 +196,7 @@ can take about seven seconds to be confirmed; `?` during that time is
 normal. Reports that have not advanced for 15 seconds are no longer trusted.
 When reporting disappears, the footer retains the last confirmed symbol in dim
 color: it means **last reported**, not confirmed current activity. Without any
-confirmed history it shows a dim `?`. `_` is always dim.
+confirmed history it shows a dim `?`.
 
 Counts use those same presentation states. If any member of a count token is
 uncertain, the entire token, including its number, is dim. Reporting loss or

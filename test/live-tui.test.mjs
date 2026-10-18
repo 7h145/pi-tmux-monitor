@@ -327,25 +327,14 @@ for (const [mode, activeTheme, producerFirst] of [
           await tmux.write("job", "%0", syntheticJob);
           await tmux.write("pi", "%0", syntheticPi);
           const confirmed = await until(rawLine);
-          if (activity === "idle") {
-            // The dim-first candidate deliberately shares normal idle's color.
-            // Confirm expiry through diagnostics, not a nonexistent color change.
-            await new Promise((resolve) =>
-              setTimeout(
-                resolve,
-                config.staleAfterMs + 2 * config.pollIntervalMs,
-              ),
-            );
-          } else {
-            const uncertain = await until(async () => {
-              const line = await rawLine();
-              return line && line !== confirmed ? line : null;
-            });
-            assert.equal(
-              stripTerminalSequences(uncertain),
-              stripTerminalSequences(confirmed),
-            );
-          }
+          const uncertain = await until(async () => {
+            const line = await rawLine();
+            return line && line !== confirmed ? line : null;
+          });
+          assert.equal(
+            stripTerminalSequences(uncertain),
+            stripTerminalSequences(confirmed),
+          );
           assert.ok(
             !(await snapshot())
               .split("\n")
@@ -367,7 +356,6 @@ for (const [mode, activeTheme, producerFirst] of [
               text.includes('"uncertain": true')
             );
           });
-          if (activity === "idle") assert.equal(await rawLine(), confirmed);
           await tmux.call(
             "set-option",
             "-p",

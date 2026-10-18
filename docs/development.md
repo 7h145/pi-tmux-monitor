@@ -79,9 +79,6 @@ changes. Uncertain glyphs and whole count tokens use the current theme's `dim`
 foreground. Status glyphs match the footer, while State and diagnostics describe
 reconciled evidence.
 
-`_` is dim by default because idle work usually needs little attention, and even
-less when it no longer reports state. It keeps that color when uncertain.
-
 The observer uses its existing poll timer to expire cached evidence even
 while an inventory scan is pending. Expiry does not reread tmux, overlap
 scans, renew heartbeat timestamps or add another timer. Changed states

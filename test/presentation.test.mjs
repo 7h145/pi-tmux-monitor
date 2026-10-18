@@ -180,3 +180,33 @@ test("themed markup glyphs, including a pipe, keep their foreground through Mark
     .map((line) => line.slice(2, line.lastIndexOf(" │")).trim());
   assert.deepEqual(cells, symbols);
 });
+
+test("confirmed idle uses normal text; missing reports dim its glyph and whole count token", () => {
+  assert.equal(DEFAULTS.themes.default.states.idle.fg, "text");
+  const confirmed = {
+    state: "idle",
+    presentationState: "idle",
+    uncertain: false,
+  };
+  const uncertain = {
+    state: "unknown",
+    presentationState: "idle",
+    uncertain: true,
+  };
+  assert.equal(
+    format([confirmed], DEFAULTS, theme, 1).text,
+    "\x1b[32m_\x1b[39m",
+  );
+  assert.equal(
+    format([uncertain], DEFAULTS, theme, 1).text,
+    "\x1b[90m_\x1b[39m",
+  );
+  assert.equal(
+    fullSummary([confirmed, uncertain], DEFAULTS, theme),
+    "\x1b[90m_2\x1b[39m",
+  );
+  assert.equal(
+    fullSummary([confirmed, confirmed], DEFAULTS, theme),
+    "\x1b[32m_2\x1b[39m",
+  );
+});
