@@ -21,7 +21,7 @@ test("manifest resources, host peers and companion skill validate with Pi loader
   const manifest = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
   );
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.3.0");
   const lock = JSON.parse(
     await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
   );

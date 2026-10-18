@@ -152,7 +152,7 @@ test("trusted glyph styling survives wide and narrow tables while metadata stays
   const text = statusText(
     ctx,
     {
-      identity: { version: "0.2.0" },
+      identity: { version: "0.3.0" },
       config: DEFAULTS,
       slots: [row],
       health: "healthy",

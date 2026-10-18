@@ -16,7 +16,7 @@ const pane = (i, names) => ({
 });
 const ctx = { ui: { theme: { fg: (_, s) => s, style: (s) => s } } };
 const data = (slots) => ({
-  identity: { version: "0.2.0" },
+  identity: { version: "0.3.0" },
   config: DEFAULTS,
   slots,
   health: "healthy",

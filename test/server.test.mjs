@@ -39,7 +39,7 @@ async function fixture(fn) {
   const current = {
     owner: "owner",
     ancestors: ["root"],
-    identity: { version: "0.2.0" },
+    identity: { version: "0.3.0" },
     config: { ...DEFAULTS },
   };
   const command = (start = true, live = () => true, factory) =>
@@ -70,7 +70,7 @@ test("server status never bootstraps or creates directories; explicit/project se
       result,
       false,
     );
-    assert.match(text, /tmux-monitor v0.2.0: Tmux server status/);
+    assert.match(text, /tmux-monitor v0.3.0: Tmux server status/);
     assert.match(text, /Observer uses a different socket/);
     assert.match(text, /Nothing was created/);
   }));
@@ -446,7 +446,7 @@ test("retirement during creation leaves old ownership intact and performs no lat
   }));
 
 test("server formatting bounds/sanitizes output and help clearly groups read-only status versus start", () => {
-  const current = { identity: { version: "0.2.0" }, config: DEFAULTS };
+  const current = { identity: { version: "0.3.0" }, config: DEFAULTS };
   const text = serverText(
     ctx,
     collectSnapshot(current),
@@ -480,7 +480,7 @@ test("server command dispatch remains focused, uses a fresh check and suppresses
   let current = {
     owner: "owner",
     config: DEFAULTS,
-    identity: { version: "0.2.0" },
+    identity: { version: "0.3.0" },
     ancestors: [],
   };
   const notices = [],

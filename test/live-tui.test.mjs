@@ -305,7 +305,7 @@ export default function(pi) {
         }
         output = await snapshot();
         assert.ok(output.includes("/tmux-monitor config (c)"), output);
-        assert.ok(output.includes("tmux-monitor v0.2.0:"), output);
+        assert.ok(output.includes("tmux-monitor v0.3.0:"), output);
         assert.ok(output.includes("┌") && output.includes("┼"), output);
         assert.ok(
           !output.includes("| --- |") && !output.includes("\\_"),
