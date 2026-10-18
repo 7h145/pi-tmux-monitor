@@ -1,8 +1,16 @@
 // @ts-nocheck
+import { ForegroundCycles } from "./cycles.mts";
 import { matches } from "./protocol.mts";
 export class Reconciler {
-  constructor(staleAfterMs, diagnostic = (_message) => {}) {
-    this.staleAfterMs = staleAfterMs;
+  constructor(
+    config,
+    diagnostic = (_message) => {},
+    cycles = new ForegroundCycles(),
+  ) {
+    this.staleAfterMs = config.staleAfterMs;
+    this.hybridDelayCycles = BigInt(config.hybridDelayCycles);
+    this.cycles = cycles;
+    this.initialInventory = true;
     this.diagnostic = diagnostic;
     this.sources = new Map();
     this.generations = new Map();
@@ -51,10 +59,19 @@ export class Reconciler {
     for (const p of panes)
       for (const type of ["job", "pi"])
         this.observe(p.paneId, type, p[type], p.observedAt?.[type] ?? now);
-    return this.expire(panes, now);
+    const slots = this.expire(panes, now, this.initialInventory);
+    this.initialInventory = false;
+    return slots;
+  }
+  completeCycle(id) {
+    for (const g of this.generations.values()) {
+      if (!g.hybridDelay) continue;
+      if (g.hybridDelay.during === id) g.hybridDelay.after++;
+      delete g.hybridDelay.during;
+    }
   }
   // Cached reevaluation must not observe records again or renew source clocks.
-  expire(panes, now) {
+  expire(panes, now, initialInventory = false) {
     const present = new Set(panes.map((p) => p.paneId));
     for (const k of this.generations.keys())
       if (!present.has(k)) {
@@ -75,6 +92,7 @@ export class Reconciler {
         g.piWorkload = null;
         g.presentationState = undefined;
         g.presentationSource = undefined;
+        delete g.hybridDelay;
         this.sources.delete(p.paneId + ":job");
         this.sources.delete(p.paneId + ":pi");
         jf = rf = false;
@@ -117,6 +135,7 @@ export class Reconciler {
         g.reporterLost = false;
         g.presentationState = undefined;
         g.presentationSource = undefined;
+        delete g.hybridDelay;
       }
       if (applicationState) {
         g.sawApplication = true;
@@ -144,6 +163,19 @@ export class Reconciler {
         applicationState ||
         (state === "running" && g.presentationSource !== "application")
       ) {
+        if (g.presentationState !== state) {
+          delete g.hybridDelay;
+          if (
+            !initialInventory &&
+            this.hybridDelayCycles > 0n &&
+            ["success", "failed"].includes(state)
+          )
+            g.hybridDelay = {
+              after: this.cycles.completed + this.hybridDelayCycles,
+              // Exclude this request only if it actually reaches settlement.
+              during: this.cycles.current?.id,
+            };
+        }
         g.presentationState = presentationState = state;
         g.presentationSource = ended
           ? "outcome"
@@ -154,7 +186,18 @@ export class Reconciler {
         presentationState = g.presentationState ?? "unknown";
         uncertain = true;
       }
-      return { ...p, state, presentationState, uncertain, workload };
+      if (g.hybridDelay && this.cycles.completed >= g.hybridDelay.after)
+        delete g.hybridDelay;
+      const compressionEligible =
+        ["success", "failed"].includes(presentationState) && !g.hybridDelay;
+      return {
+        ...p,
+        state,
+        presentationState,
+        uncertain,
+        compressionEligible,
+        workload,
+      };
     });
   }
 }

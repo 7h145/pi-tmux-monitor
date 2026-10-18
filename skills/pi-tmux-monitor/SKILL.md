@@ -105,7 +105,10 @@ Requested command/helper results and errors still return normally; workload
 output and known command exits are unchanged.
 
 Counts are dense, for example `A3_5R+?`. In the default hybrid view, consecutive
-runs of six or more success/failed presentations become local counts. The theme's
+runs of six or more compression-eligible success/failed presentations become local
+counts. New outcomes wait `hybridDelayCycles` subsequent completed foreground
+user-prompt cycles (default `3`, excluding the current cycle); `0` permits immediate
+grouping. Narrow/static summaries still count them. The theme's
 summary separator (`|` by default) separates them from neighboring glyphs, with
 no separators at the outer edges. A whole count token is dim if any member is
 uncertain. Reporting loss/recovery alone changes styling, not

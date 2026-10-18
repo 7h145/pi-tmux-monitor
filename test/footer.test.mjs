@@ -596,3 +596,97 @@ test("actual compositor: hybrid grouping and whole-token uncertainty survive res
     } finally {adapter?.stop();h.stop();}
   }
 });
+
+test(
+  "actual compositor: delayed outcomes split mature groups and regroup at a final return without I/O",
+  { skip: !compositor },
+  async () => {
+    for (const base of configs)
+      for (const producerFirst of [false, true]) {
+        const config = { ...base, hybridDelayCycles: 1, socketPath: "/unused" };
+        const h = harness({ trace: true, semantic: true });
+        let adapter,
+          observer,
+          reads = 0;
+        const rows = Array.from({ length: 13 }, (_, i) => ({
+          paneId: `%${i + 1}`,
+          pid: String(i + 10),
+          sessions: [],
+          pi: null,
+          job: job({
+            paneId: `%${i + 1}`,
+            jobId: `job-${i}`,
+            phase: "success",
+            exitCode: 0,
+          }),
+        }));
+        Object.assign(rows[6].job, { phase: "running", exitCode: null });
+        try {
+          if (!producerFirst) h.start();
+          adapter = new FooterAdapter(h.pi, h.ctx, config, () => {});
+          if (producerFirst) h.start();
+          observer = new Observer({
+            cwd: "/unused",
+            owner: "owner",
+            env: {},
+            config,
+            clock: () => 0,
+            publish: (slots) => adapter.publish(slots),
+            tmuxFactory: () => ({
+              identity: async () => {
+                reads++;
+                return "server";
+              },
+              inventory: async () => {
+                reads++;
+                return structuredClone(rows);
+              },
+            }),
+          });
+          await observer.scan();
+          Object.assign(rows[6].job, { phase: "success", exitCode: 0 });
+          await observer.scan();
+          const component = footer(h.statuses);
+          const glyph = config.themes[config.activeTheme].states.success.glyph;
+          const separator = config.themes[config.activeTheme].summarySeparator;
+          const expected = `${glyph}6${separator}${glyph}${separator}${glyph}6`;
+          assert.ok(
+            stripTerminalSequences(component.render(140)[0]).includes(expected),
+          );
+          assert.equal(
+            stripTerminalSequences(h.statuses.get(STATUS_KEY)),
+            `${glyph}13`,
+          );
+          for (let width = 0; width <= 140; width++)
+            assert.ok(visibleWidth(component.render(width)[0]) <= width);
+          const before = reads;
+          observer.cycles.input(true, true, false);
+          observer.cycles.prepare();
+          observer.cycles.start();
+          observer.cycles.message("user");
+          observer.completeUserCycle();
+          assert.equal(reads, before);
+          assert.ok(observer.slots.every((slot) => slot.compressionEligible));
+          assert.ok(
+            stripTerminalSequences(component.render(140)[0]).includes(
+              `${glyph}13`,
+            ),
+          );
+          assert.ok(
+            !stripTerminalSequences(component.render(140)[0]).includes(
+              expected,
+            ),
+          );
+          h.stop();
+          assert.equal(
+            stripTerminalSequences(h.statuses.get(STATUS_KEY)),
+            `${glyph}13`,
+          );
+        } finally {
+          observer?.stop();
+          adapter?.stop();
+          h.stop();
+        }
+      }
+  },
+);

@@ -152,10 +152,15 @@ space is available. Load that extension separately if you want the
 indicator to fit alongside your other footer information.
 
 With the compositor, you normally see one symbol per pane in creation order.
-Consecutive runs of six or more successful/failed outcomes become local counts,
-even when the individual symbols would fit: `ARR|!2+4|R` means two failures and
-four successes between the surrounding panes. The `|` marks a group boundary,
+Consecutive runs of six or more compression-eligible successful/failed outcomes
+become local counts, even when the individual symbols would fit: `ARR|!2+4|R`
+means two failures and four successes between the surrounding panes. The `|` marks a group boundary,
 not omitted work. Shorter outcome runs stay individual.
+
+New outcomes stay individual until three subsequent user-prompt cycles have
+finished. The cycle already underway does not count. Configure this with
+[`hybridDelayCycles`](docs/configuration.md#hybrid-compression-delay), or set it to
+`0` for immediate grouping. Width-limited and static summaries still include them.
 
 When space is tight, the monitor summarizes the entire set, then uses a shorter
 summary of the states needing attention. Other footer items can take priority

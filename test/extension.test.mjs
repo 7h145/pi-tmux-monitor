@@ -3,7 +3,12 @@ import { test } from "node:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import monitor, { replaceContext } from "../pi-tmux-monitor.ts";
-import { createEventBus } from "@earendil-works/pi-coding-agent";
+import { Observer } from "../src/observer.mts";
+import {
+  AgentSession,
+  ExtensionRunner,
+  createEventBus,
+} from "@earendil-works/pi-coding-agent";
 import { Tmux } from "../src/tmux.mts";
 import { STATUS_KEY } from "../src/footer.mts";
 import { parseCLI, launch } from "../src/launch.mts";
@@ -66,6 +71,7 @@ async function scenario(fn) {
     const emit = (name, event = {}) => handlers.get(name)?.(event, ctx);
     await fn({
       emit,
+      handlers,
       commands,
       statuses,
       notices,
@@ -599,4 +605,225 @@ test("explicit diagnostics remain bounded across repeated extension reloads with
     assert.equal(new Set(info.diagnostics).size, 16);
     assert.ok(info.diagnostics.every((s) => s.length <= 320));
     assert.ok(!notices.at(-1).includes("private rejected content"));
+  }));
+
+test("locked-host prompt dispatch and final settlement age hybrid delays without provider requests", (t) =>
+  scenario(async ({ emit, handlers, tmux, agent, ctx, commands, pi }) => {
+    const { job } = await import("./fixtures.mjs");
+    const rows = Array.from({ length: 6 }, (_, i) => ({
+      paneId: `%${i + 1}`,
+      pid: String(i + 10),
+      sessions: [],
+      pi: null,
+      job: job({
+        paneId: `%${i + 1}`,
+        jobId: `j${i}`,
+        ownerSessionId: "original",
+        ancestors: ["original"],
+      }),
+    }));
+    let observer,
+      render,
+      inventories = 0,
+      changeDuringRun = true,
+      restarts = 2;
+    const start = Observer.prototype.start,
+      inventory = Tmux.prototype.inventory;
+    t.mock.method(Observer.prototype, "start", async function () {
+      observer = this;
+      return start.call(this);
+    });
+    t.mock.method(Tmux.prototype, "inventory", async function (...args) {
+      if (this.socket !== tmux.socket) return inventory.apply(this, args);
+      inventories++;
+      return structuredClone(rows);
+    });
+    await writeFile(
+      join(agent, "pi-tmux-monitor.json"),
+      JSON.stringify({
+        socketPath: tmux.socket,
+        pollIntervalMs: 100000,
+        heartbeatIntervalMs: 100000,
+        staleAfterMs: 300000,
+      }),
+    );
+    await emit("session_start");
+    pi.events.emit("footer-compositor:dynamic:available", {
+      version: 1,
+      instanceId: "cycle-test",
+      register(input) {
+        render = input.render;
+        return () => {};
+      },
+    });
+    const text = () => render({ maxWidth: 100, theme: ctx.ui.theme });
+    const runner = Object.create(ExtensionRunner.prototype);
+    runner.extensions = [
+      {
+        path: "monitor-fixture",
+        handlers: new Map(
+          [...handlers].map(([name, handler]) => [name, [handler]]),
+        ),
+        commands: new Map(
+          [...commands].map(([name, definition]) => [
+            name,
+            { ...definition, name },
+          ]),
+        ),
+      },
+    ];
+    runner.createContext = runner.createCommandContext = () => ctx;
+    runner.emitError = (error) => assert.fail(JSON.stringify(error));
+    // Exercise the host's dispatch, retry loop and final-boundary implementation.
+    // The agent below emits lifecycle metadata only; it has no model transport.
+    const session = {
+      _extensionRunner: runner,
+      _baseSystemPromptOptions: { cwd: ctx.cwd, selectedTools: [] },
+      _pendingNextTurnMessages: [],
+      _pendingToolNames: new Set(),
+      _deferredSettledActions: [],
+      _modelRuntime: { hasConfiguredAuth: () => true },
+      model: { provider: "fixture" },
+      get isStreaming() {
+        return this._isAgentRunActive ?? false;
+      },
+      _runInputHandlers: AgentSession.prototype._runInputHandlers,
+      _tryExecuteExtensionCommand:
+        AgentSession.prototype._tryExecuteExtensionCommand,
+      prompt: AgentSession.prototype.prompt,
+      _runAgentPrompt: AgentSession.prototype._runAgentPrompt,
+      _runBeforeSettleBoundary: AgentSession.prototype._runBeforeSettleBoundary,
+      _emitAgentSettled: AgentSession.prototype._emitAgentSettled,
+      _expandSkillCommand: (text) => text,
+      promptTemplates: [],
+      _normalizePromptImages: async () => ({ images: [], hints: [] }),
+      _preparePromptAndToolLoadout: () => undefined,
+      getActiveToolNames: () => [],
+      _findLastAssistantMessage: () => undefined,
+      _flushPendingBashMessages() {},
+      _flushPendingCustomMessages() {},
+      _recordSelection() {},
+      _commitBoundaryDrafts() {},
+      _buildBoundaryContext: () => ({ canContinue: false }),
+      _handlePostAgentRun: async () => restarts-- > 0,
+      _resolveIdleWaitIfIdle() {},
+      _finishCancelledRetry() {},
+      _emit() {},
+      _lastActivityOutcome: "completed",
+    };
+    ctx.isIdle = () => !session.isStreaming;
+    const loop = async (messages = []) => {
+      await runner.emit({ type: "agent_start" });
+      for (const message of Array.isArray(messages) ? messages : [messages])
+        await runner.emit({ type: "message_start", message });
+      if (changeDuringRun) {
+        rows.forEach((row) =>
+          Object.assign(row.job, { phase: "success", exitCode: 0 }),
+        );
+        await observer.scan();
+        changeDuringRun = false;
+      }
+      assert.equal(text(), "++++++");
+      await runner.emit({ type: "turn_end" });
+      await runner.emit({ type: "agent_end" });
+    };
+    session.agent = {
+      prompt: loop,
+      continue: () => loop(),
+      hasQueuedMessages: () => false,
+    };
+    await session.prompt("fixture");
+    assert.equal(observer.cycles.completed, 1n);
+    assert.equal(text(), "++++++");
+    const before = inventories;
+    await AgentSession.prototype.sendCustomMessage.call(
+      session,
+      { customType: "fixture", content: "", display: false },
+      { triggerTurn: true },
+    );
+    await AgentSession.prototype.sendUserMessage.call(session, "fixture");
+    await session.prompt("/tmux-monitor diagnostics");
+    assert.equal(observer.cycles.completed, 1n);
+    assert.equal(text(), "++++++");
+    for (let cycle = 1; cycle <= 3; cycle++) {
+      await session.prompt("fixture");
+      assert.equal(text(), cycle === 3 ? "+6" : "++++++");
+    }
+    assert.equal(inventories, before);
+    assert.equal(observer.cycles.completed, 4n);
+    // A failure after before_agent_start must not lend its user origin to a custom turn.
+    session._normalizePromptImages = async () => {
+      throw Error("preflight rejected");
+    };
+    await assert.rejects(session.prompt("fixture"), /preflight rejected/);
+    session.agent.prompt = async (message) => {
+      await runner.emit({ type: "agent_start" });
+      await runner.emit({ type: "message_start", message });
+    };
+    await AgentSession.prototype.sendCustomMessage.call(
+      session,
+      { customType: "fixture", content: "", display: false },
+      { triggerTurn: true },
+    );
+    assert.equal(observer.cycles.completed, 4n);
+    assert.equal(text(), "+6");
+    session._normalizePromptImages = async () => ({ images: [], hints: [] });
+    session.agent.prompt = async (messages) => {
+      await runner.emit({ type: "agent_start" });
+      for (const message of messages)
+        await runner.emit({ type: "message_start", message });
+      session._agentRunAbortRequested = true;
+    };
+    await session.prompt("fixture");
+    assert.equal(observer.cycles.completed, 5n);
+  }));
+
+test("cycle tracking reads event metadata, never prompt text or message content", (t) =>
+  scenario(async ({ emit }) => {
+    let observer;
+    const start = Observer.prototype.start;
+    t.mock.method(Observer.prototype, "start", async function () {
+      observer = this;
+      return start.call(this);
+    });
+    await emit("session_start");
+    await emit("input", {
+      source: "interactive",
+      get text() {
+        assert.fail("prompt text was read");
+      },
+    });
+    await emit("before_agent_start", {
+      systemPromptOptions: {},
+      get prompt() {
+        assert.fail("prompt text was read");
+      },
+    });
+    await emit("agent_start");
+    await emit("message_start", {
+      message: {
+        role: "user",
+        get content() {
+          assert.fail("message content was read");
+        },
+      },
+    });
+    await emit("input", {
+      source: "interactive",
+      streamingBehavior: "followUp",
+      get text() {
+        assert.fail("queued prompt was read");
+      },
+    });
+    await emit("agent_end");
+    await emit("turn_end");
+    await emit("agent_before_settle", { outcome: "completed" });
+    await emit("session_before_compact");
+    await emit("session_compact");
+    await emit("session_compact_failed");
+    assert.equal(observer.cycles.completed, 0n);
+    await emit("agent_settled", { aborted: false });
+    assert.equal(observer.cycles.completed, 1n);
+    await emit("agent_settled", { aborted: false });
+    assert.equal(observer.cycles.completed, 1n);
   }));

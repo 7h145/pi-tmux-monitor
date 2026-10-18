@@ -28,6 +28,7 @@ export const DEFAULTS = {
   heartbeatIntervalMs: 5000,
   staleAfterMs: 15000,
   tmuxTimeoutMs: 1000,
+  hybridDelayCycles: 3,
   summaryOrder: [
     "failed",
     "active",
@@ -101,6 +102,11 @@ export function validate(config) {
     )
   )
     throw new Error("Invalid config");
+  if (
+    !Number.isSafeInteger(config.hybridDelayCycles) ||
+    config.hybridDelayCycles < 0
+  )
+    throw new Error("Invalid hybrid delay");
   for (const k of [
     "pollIntervalMs",
     "heartbeatIntervalMs",

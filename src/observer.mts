@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { ForegroundCycles } from "./cycles.mts";
 import { RUNNER_DIAGNOSTICS } from "./diagnostics.mts";
 import { resolve } from "node:path";
 import { realpath } from "node:fs/promises";
@@ -27,7 +28,8 @@ export class Observer {
       tmuxFactory,
       clock,
     });
-    this.reconciler = new Reconciler(config.staleAfterMs, diagnostic);
+    this.cycles = new ForegroundCycles();
+    this.reconciler = new Reconciler(config, diagnostic, this.cycles);
     this.cache = [];
     this.slots = [];
     this.running = false;
@@ -42,8 +44,15 @@ export class Observer {
     const changed = this.slots.length > 0;
     this.slots = [];
     this.lastSuccessfulScanAt = null;
-    this.reconciler = new Reconciler(this.config.staleAfterMs, this.diagnostic);
+    this.reconciler = new Reconciler(this.config, this.diagnostic, this.cycles);
     if (changed) this.publish(this.slots);
+  }
+  completeUserCycle() {
+    if (this.retired) return;
+    const id = this.cycles.settle();
+    if (id === null) return;
+    this.reconciler.completeCycle(id);
+    this.expire();
   }
   inventoryAge(now = this.clock()) {
     return this.lastSuccessfulScanAt === null
@@ -60,7 +69,8 @@ export class Observer {
           p.paneId !== this.slots[i]?.paneId ||
           p.state !== this.slots[i]?.state ||
           p.presentationState !== this.slots[i]?.presentationState ||
-          p.uncertain !== this.slots[i]?.uncertain,
+          p.uncertain !== this.slots[i]?.uncertain ||
+          p.compressionEligible !== this.slots[i]?.compressionEligible,
       )
     ) {
       this.slots = slots;

@@ -8,6 +8,7 @@
   "heartbeatIntervalMs": 5000,
   "staleAfterMs": 15000,
   "tmuxTimeoutMs": 1000,
+  "hybridDelayCycles": 3,
   "summaryOrder": [
     "failed",
     "active",

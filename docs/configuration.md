@@ -49,6 +49,7 @@ Times are positive integer milliseconds, up to 2,147,483,647.
 | `heartbeatIntervalMs` | `5000` | Interval between reports from a running command or Pi |
 | `staleAfterMs` | `15000` | How long a source may go without an advancing report before it is no longer trusted; also the old-scan notice threshold |
 | `tmuxTimeoutMs` | `1000` | Timeout for each tmux operation, not the entire inventory scan |
+| `hybridDelayCycles` | `3` | Subsequent completed foreground user-prompt cycles before a changed outcome can join a local hybrid group |
 | `activeTheme` | `"default"` | Display theme name |
 | `summaryOrder` | failed, active, idle, running, success, unknown, unregistered | Presentation-state order in whole-set summaries and local hybrid groups |
 | `partialOrder` | failed, active, unknown, unregistered, running, idle, success | Priority when only part of the count summary fits |
@@ -58,6 +59,26 @@ The [example configuration](../examples/pi-tmux-monitor.json) contains all
 settings, the built-in theme, and an optional `gaudy` theme to copy or adapt.
 Only `default` is built in. Both order arrays must contain all seven state
 names exactly once.
+
+### Hybrid compression delay
+
+`hybridDelayCycles` is a nonnegative safe integer; its default is `3`. A new
+success or failure appears immediately but stays individual until that many
+subsequent user-prompt cycles finish. One cycle means a user request that runs
+through final settlement and returns control to the editor. A cycle already
+underway when the outcome changes does not count. With delay `1`, the next
+such cycle's return permits grouping; with `3`, the third does. `0` permits
+immediate grouping.
+
+Tool/model steps, retries, compaction, background turns, inspections and elapsed
+idle time do not advance the delay. Each pane/workload generation has its own
+deadline. Unchanged reports and uncertainty/recovery do not restart it. Outcomes
+already established in the observer's initial inventory form a mature baseline;
+newly discovered completed workloads afterward receive the delay too.
+
+Only local hybrid grouping waits. Narrow whole-set/partial summaries and static
+fallback still count every pane. A pending outcome separates neighboring mature
+runs; reaching its deadline allows regrouping under the normal six-outcome rule.
 
 ### Scope and ownership
 

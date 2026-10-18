@@ -102,11 +102,27 @@ export default function monitor(pi: ExtensionAPI) {
     }
   });
   pi.on("session_shutdown", (event) => stop(event.reason));
-  pi.on("agent_start", () => runtime?.reporter?.active());
+  pi.on("input", (event, ctx) => {
+    runtime?.observer?.cycles.input(
+      ["interactive", "rpc"].includes(event.source),
+      ctx.isIdle(),
+      event.streamingBehavior !== undefined,
+    );
+  });
+  pi.on("agent_start", () => {
+    runtime?.observer?.cycles.start();
+    return runtime?.reporter?.active();
+  });
+  pi.on("message_start", (event) => {
+    runtime?.observer?.cycles.message(event.message.role);
+  });
   pi.on("agent_before_settle", (event) => {
     runtime?.reporter?.beforeSettle(event.outcome);
   });
-  pi.on("agent_settled", (event) => runtime?.reporter?.settled(event.aborted));
+  pi.on("agent_settled", (event) => {
+    runtime?.observer?.completeUserCycle();
+    return runtime?.reporter?.settled(event.aborted);
+  });
   pi.on("session_before_compact", () => runtime?.reporter?.compactStart());
   pi.on("session_compact", (_event, ctx) =>
     runtime?.reporter?.compactEnd(ctx.isIdle()),
@@ -130,6 +146,7 @@ export default function monitor(pi: ExtensionAPI) {
     };
   }
   pi.on("before_agent_start", (event) => {
+    runtime?.observer?.cycles.prepare();
     const info = context();
     if (info)
       event.systemPromptOptions.appendSystemPrompt = replaceContext(

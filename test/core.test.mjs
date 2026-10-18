@@ -201,7 +201,7 @@ test("protocol validation, identity and bounded redacted diagnostics", () => {
   );
 });
 test("freshness and independent lifetime precedence", () => {
-  const r = new Reconciler(15000),
+  const r = new Reconciler(DEFAULTS),
     j = job(),
     p = pane(j);
   const state = (time) => r.reconcile([p], time)[0].state;
@@ -242,7 +242,7 @@ test("freshness and independent lifetime precedence", () => {
   assert.equal(state(60003), "failed");
 });
 test("generation reuse permanently invalidates old outcomes", () => {
-  const r = new Reconciler(15000),
+  const r = new Reconciler(DEFAULTS),
     p = pane(job({ phase: "success", exitCode: 0 }));
   assert.equal(r.reconcile([p], 0)[0].state, "success");
   p.pi = reporter();
@@ -415,8 +415,9 @@ test("display states and glyphs are distinct from workload kinds", () => {
 for (const kind of ["batch", "service", "interactive"]) {
   test(`${kind}: fresh application state, independent liveness, reporter loss and retained outcomes`, () => {
     const diagnostics = [];
-    const reconciler = new Reconciler(15, (message) =>
-      diagnostics.push(message),
+    const reconciler = new Reconciler(
+      { ...DEFAULTS, staleAfterMs: 15 },
+      (message) => diagnostics.push(message),
     );
     const j = job({ kind, runtime: "pi" });
     const p = pane(j, reporter({ kind, jobId: j.jobId }));
@@ -473,7 +474,7 @@ for (const kind of ["batch", "service", "interactive"]) {
   });
 
   test(`${kind}: generic commands need running-phase evidence; standalone Pi state ignores kind`, () => {
-    const r = new Reconciler(15);
+    const r = new Reconciler({ ...DEFAULTS, staleAfterMs: 15 });
     const p = pane(job({ kind }));
     assert.equal(r.reconcile([p], 0)[0].state, "unknown");
     p.job.heartbeatSeq++;
@@ -499,7 +500,9 @@ for (const kind of ["batch", "service", "interactive"]) {
 
 test("fresh runner survives reporter removal, incompatible reports, and reporter restart", () => {
   const diagnostics = [];
-  const r = new Reconciler(15, (message) => diagnostics.push(message));
+  const r = new Reconciler({ ...DEFAULTS, staleAfterMs: 15 }, (message) =>
+    diagnostics.push(message),
+  );
   const p = pane(
     job({ kind: "interactive", runtime: "pi" }),
     reporter({ jobId: "j" }),

@@ -37,6 +37,7 @@ const join = (tokens) => tokens.map((token) => token.text).join("");
 // Group only consecutive outcome presentations; never reorder pane identities.
 function hybrid(slots, config, theme) {
   const outcome = (slot) =>
+    slot.compressionEligible !== false &&
     ["success", "failed"].includes(presentationState(slot));
   const parts = [];
   for (let i = 0; i < slots.length; ) {

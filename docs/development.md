@@ -24,7 +24,8 @@ The main files are:
 | `src/diagnostics.mts` | Bounded diagnostic storage and fixed runner diagnostic codes |
 | `src/protocol.mts` | Validation of versioned status records and lineage |
 | `src/observer.mts` | Server selection, inventory, scan age and cached expiry |
-| `src/reconcile.mts` | Ownership, freshness and generation-bound presentation history |
+| `src/reconcile.mts` | Ownership, freshness and generation-bound presentation/delay history |
+| `src/cycles.mts` | Foreground user-request origin and final-return accounting |
 | `src/reporter.mts` | This Pi's activity reports |
 | `src/runner.mjs` | Command liveness and exit reports |
 | `src/helper.mts`, `src/launch.mts` | Public script dispatch/results and workload launch |
@@ -133,12 +134,15 @@ persistent capability loss uses the same grace period. Diagnostics reports
 `format(orderedSlots, resolvedConfig, currentPiTheme, allocatedColumns)`
 returns `{ text, mode: 'strip' | 'hybrid' | 'summary' | 'partial' | 'hidden' }`.
 Observer snapshots supply `state` (current evidence), `presentationState`
-(last-known presentation) and `uncertain` (a boolean). For direct formatter
-inputs, an omitted presentation state uses `state`; omitted uncertainty defaults
-to true for an unknown presentation. Other inventory fields are ignored.
+(last-known presentation), `uncertain` and `compressionEligible` (booleans).
+For direct formatter inputs, an omitted presentation state uses `state`; omitted
+uncertainty defaults to true for an unknown presentation. An omitted compression
+flag means eligible; callers with pending outcomes must supply `false`.
+Other inventory fields are ignored.
 
 Build the hybrid candidate in creation order: collapse maximal consecutive runs
-of at least six success/failed presentation slots into local summaries. Keep all
+of at least six compression-eligible success/failed presentation slots into local
+summaries. Pending outcomes remain individual and separate runs. Keep all
 other slots as individual glyphs. Use the theme's `summarySeparator` between
 summaries and adjacent strips, never at the outer edges: `ARR|!2+4|R`. Do this
 even when a full per-pane strip would fit. Return `hybrid` if a run qualifies,
@@ -155,12 +159,29 @@ and retained outcomes are not hidden just for being quiet.
 Local counts refer only to their grouped slots; whole/partial summaries count
 the full set. A token is dim if any member is uncertain. Reporting loss/recovery
 alone changes styling, not grouping, token text or width. Actual state/generation
-changes may regroup normally.
+changes and compression-delay expiry may regroup normally.
 
 Measure with Pi TUI's `visibleWidth`, excluding ANSI SGR sequences. Rendering
 must be synchronous, single-line, free of I/O and side effects, and no wider
 than the allocated budget. Use the passed theme rather than cached ANSI.
 Preserve `fullSummary()` for static fallback if replacing the formatter.
+
+### Compression eligibility
+
+The reconciler stores a deadline only for pending outcomes in its existing
+pane/generation records. It compares that deadline with one completed-user-cycle
+counter. A transient cycle identity excludes the request underway at observation
+only if that request actually reaches settlement. Repeated reports and uncertainty
+retain the deadline; a confirmed state/generation change replaces it. Initial
+inventory outcomes are a baseline, not fresh transitions.
+
+Lifecycle hooks use input origin, message role and final settlement, never prompt
+or message content. Prepared inputs must deliver an actual user message in an
+agent run before their return can count. This excludes handled/failed preflight
+inputs, custom/background turns, queued messages and intermediate loop restarts.
+At a counted return, the observer reevaluates cached eligibility and republishes
+changed snapshots without inventory I/O or freshness renewal. Counters and
+pending history are observer-local, not tmux metadata or conversation entries.
 
 ## Diagnostic delivery
 

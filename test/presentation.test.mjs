@@ -13,7 +13,9 @@ const theme = {
 };
 function fixture(activity = "active") {
   const diagnostics = [];
-  const r = new Reconciler(15, (...args) => diagnostics.push(args));
+  const r = new Reconciler({ ...DEFAULTS, staleAfterMs: 15 }, (...args) =>
+    diagnostics.push(args),
+  );
   const p = {
     paneId: "%1",
     pid: "10",
@@ -113,7 +115,8 @@ test("history cannot cross jobs, pane replacement, removed registration or names
   r.reconcile([], 9);
   assert.equal(at(10).presentationState, "unknown");
   assert.equal(
-    new Reconciler(15).reconcile([p], 11)[0].presentationState,
+    new Reconciler({ ...DEFAULTS, staleAfterMs: 15 }).reconcile([p], 11)[0]
+      .presentationState,
     "unknown",
   );
 });

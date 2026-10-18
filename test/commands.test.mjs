@@ -145,7 +145,7 @@ test("status rows preserve every full-strip state and snapshot order, not footer
 });
 
 test("generation reuse does not show the old job label/kind as the new workload", () => {
-  const reconcile = new Reconciler(15);
+  const reconcile = new Reconciler({ ...DEFAULTS, staleAfterMs: 15 });
   const p = {
     paneId: "%1",
     pid: "10",
