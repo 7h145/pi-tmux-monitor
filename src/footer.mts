@@ -32,7 +32,7 @@ export class FooterAdapter {
           this.failedRegistration();
           return;
         }
-        this.unregister?.();
+        this.releaseRegistration();
         this.unregister = remove;
         this.instanceId = payload.instanceId;
         this.capability = "dynamic-v1";
@@ -51,8 +51,7 @@ export class FooterAdapter {
           payload.instanceId !== this.instanceId
         )
           return;
-        this.unregister?.();
-        this.unregister = undefined;
+        this.releaseRegistration();
         this.instanceId = undefined;
         this.capability = "missing";
         this.publish(this.slots);
@@ -76,7 +75,7 @@ export class FooterAdapter {
       this.retired ||
       !this.startupFinished ||
       this.instanceId ||
-      this.warned ||
+      this.missingRecorded ||
       this.missingTimer !== undefined
     )
       return;
@@ -91,15 +90,15 @@ export class FooterAdapter {
     this.missingTimer.unref?.();
   }
   failedRegistration() {
-    if (this.registrationWarned) return;
-    this.registrationWarned = true;
+    if (this.registrationRecorded) return;
+    this.registrationRecorded = true;
     this.diagnostic(
       "Compositor registration failed; retaining any working registration or static fallback",
     );
   }
   missing() {
-    if (!this.warned) {
-      this.warned = true;
+    if (!this.missingRecorded) {
+      this.missingRecorded = true;
       this.diagnostic(
         "Width-aware compositor capability unavailable; using static summary",
       );
@@ -120,14 +119,22 @@ export class FooterAdapter {
       fullSummary(slots, this.config, this.ctx.ui.theme) || undefined,
     );
   }
+  releaseRegistration() {
+    const remove = this.unregister;
+    this.unregister = undefined;
+    try {
+      remove?.();
+    } catch {
+      this.diagnostic("Compositor cleanup failed");
+    }
+  }
   stop() {
     if (this.retired) return;
     this.retired = true;
     this.cancelMissingCheck();
     for (const unsubscribe of this.subscriptions) unsubscribe();
     this.subscriptions = [];
-    this.unregister?.();
-    this.unregister = undefined;
+    this.releaseRegistration();
     this.instanceId = undefined;
     this.ctx.ui.setStatus(STATUS_KEY, undefined);
   }

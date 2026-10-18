@@ -205,7 +205,9 @@ a confirmed state change or workload replacement can change the grouping.
 
 Status's State column and diagnostics describe current evidence: a fresh command
 report may establish running even while the glyph retains uncertain Pi activity.
-Reporter loss stays in diagnostics, without unsolicited warning notifications.
+Background monitor problems stay in `/tmux-monitor diagnostics`, without
+unsolicited notifications during startup, reload or polling. Requested monitor
+commands still return their results and errors.
 If the connection is lost, cached tasks remain visible with uncertain live glyphs;
 known command exits remain confirmed. The status view warns when its last
 successful scan is old.

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { RUNNER_DIAGNOSTICS } from "./diagnostics.mts";
 import { resolve } from "node:path";
 import { realpath } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
@@ -117,6 +118,9 @@ export class Observer {
         } catch {}
       }
       if (this.retired) return;
+      for (const pane of panes)
+        for (const code of pane.job?.diagnostics ?? [])
+          this.diagnostic(`Pane ${pane.paneId}: ${RUNNER_DIAGNOSTICS[code]}`);
       // Observe every pane before scoping: an out-of-scope pane may be reused
       // by this owner, and confirming that generation needs heartbeat history.
       this.cache = panes;

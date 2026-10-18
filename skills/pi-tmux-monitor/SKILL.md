@@ -100,8 +100,9 @@ The footer can retain a last-known glyph in dim foreground when reporting is
 lost, even while fresh runner evidence establishes running. With no confirmed
 history it uses a dim unknown glyph. Check status's State column and diagnostics
 for current evidence rather than treating a retained glyph as fresh activity.
-Reporter loss stays in diagnostics, without unsolicited warnings; known command
-exits remain confirmed.
+Background monitor problems stay in diagnostics, without unsolicited messages.
+Requested command/helper results and errors still return normally; workload
+output and known command exits are unchanged.
 
 Counts are dense, for example `A3_5R+?`. In the default hybrid view, consecutive
 runs of six or more success/failed presentations become local counts. The theme's

@@ -48,7 +48,7 @@ for (const activity of ["active", "idle", "failed"]) {
       ["unknown", activity, true],
     );
     assert.equal(diagnostics.length, 1);
-    assert.deepEqual(diagnostics[0][1], { notify: false });
+    assert.equal(diagnostics[0].length, 1);
     p.job.heartbeatSeq++;
     at(26);
     assert.equal(at(27).presentationState, activity);

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { RUNNER_DIAGNOSTICS } from "./diagnostics.mts";
 export const JOB = "@pi-tmux-monitor-job";
 export const PI = "@pi-tmux-monitor-pi";
 export const OWNER = "@pi-tmux-monitor-owner";
@@ -67,6 +68,18 @@ export function parseRecord(raw, type, paneId, diagnostic = (_message) => {}) {
       throw 0;
     if (type === "job") {
       if (!id(r.jobId) || !["command", "pi"].includes(r.runtime)) throw 0;
+      if (
+        r.diagnostics !== undefined &&
+        (!Array.isArray(r.diagnostics) ||
+          r.diagnostics.length > Object.keys(RUNNER_DIAGNOSTICS).length ||
+          new Set(r.diagnostics).size !== r.diagnostics.length ||
+          !r.diagnostics.every(
+            (code) =>
+              typeof code === "string" &&
+              Object.hasOwn(RUNNER_DIAGNOSTICS, code),
+          ))
+      )
+        throw 0;
       lineage(r.ownerSessionId, r.ancestors, true);
       if (
         r.label !== undefined &&

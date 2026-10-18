@@ -3,6 +3,7 @@ import {
   getAgentDir,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
+import { processDiagnostics } from "./src/diagnostics.mts";
 import { loadConfig } from "./src/config.mts";
 import { Reporter } from "./src/reporter.mts";
 import { Observer } from "./src/observer.mts";
@@ -30,6 +31,7 @@ export function replaceContext(existing: string, block: string) {
 }
 export default function monitor(pi: ExtensionAPI) {
   let runtime: any;
+  const diagnostics = processDiagnostics();
   async function stop(reason: string) {
     const old = runtime;
     runtime = undefined;
@@ -48,24 +50,12 @@ export default function monitor(pi: ExtensionAPI) {
     await stop("reload");
     const current: any = {
       retired: false,
-      diagnostics: [],
-      seen: new Set(),
+      diagnostics: diagnostics.messages,
       owner: ctx.sessionManager.getSessionId(),
       cwd: ctx.cwd,
     };
     runtime = current;
-    const diagnostic = (message: string, { notify = true } = {}) => {
-      message = message.slice(0, 320);
-      if (
-        current.retired ||
-        current.seen.has(message) ||
-        current.diagnostics.length >= 16
-      )
-        return;
-      current.seen.add(message);
-      current.diagnostics.push(message);
-      if (notify && ctx.hasUI) ctx.ui.notify(message, "warning");
-    };
+    const diagnostic = diagnostics.record;
     current.config = await loadConfig(
       getAgentDir(),
       ctx.cwd,

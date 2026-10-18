@@ -104,7 +104,8 @@ for (const [mode, activeTheme, producerFirst] of [
         const synth = join(dir, "synthetic.ts");
         await writeFile(
           synth,
-          `export default function(pi) {
+          `import { processDiagnostics } from ${JSON.stringify(join(bundle, "src/diagnostics.mjs"))};
+export default function(pi) {
       const prefix='footer-compositor:dynamic:';
       const dynamic=[['footer-compositor:left:20:synthetic-dynamic-left','LD'],['footer-compositor:right:30:synthetic-dynamic-right','dyn']];
       const entries=[['footer-compositor:left:10:synthetic-read-only','(ro)'],['footer-compositor:right:10:synthetic-git','clean'],['footer-compositor:right:20:synthetic-usage','C W2%'],['synthetic-ordinary','ordinary'],...dynamic.map(([key,text])=>[key,'cached '+text])];
@@ -128,6 +129,7 @@ for (const [mode, activeTheme, producerFirst] of [
         removers.forEach(remove=>remove()); removers=[]; instance=undefined;
         entries.forEach(([key])=>ctx.ui.setStatus(key,undefined));
       });
+      pi.registerCommand('monitor-test-background-diagnostic',{description:'Synthetic background diagnostic',handler:(_args,ctx)=> {processDiagnostics().record('Synthetic background diagnostic retained across reload');ctx.ui.notify('DIAGNOSTIC RECORDED','info');}});
       pi.registerCommand('monitor-test-theme',{description:'Synthetic theme test',handler:async(_args,ctx)=> {ctx.ui.setTheme('light');ctx.ui.notify('THEME CHANGED','info');}});
     }`,
         );
@@ -213,6 +215,21 @@ for (const [mode, activeTheme, producerFirst] of [
         );
         await until(async () => (await snapshot()).includes(warmKey));
         assert.ok(!(await snapshot()).includes("Width-aware compositor"));
+        await tmux.call(
+          "send-keys",
+          "-t",
+          pane,
+          "/monitor-test-background-diagnostic",
+          "Enter",
+        );
+        await until(async () =>
+          (await snapshot()).includes("DIAGNOSTIC RECORDED"),
+        );
+        assert.ok(
+          !(await snapshot()).includes(
+            "Synthetic background diagnostic retained across reload",
+          ),
+        );
         await writeFile(entry, currentEntry);
         await tmux.call("send-keys", "-t", pane, "/reload", "Enter");
         const updated = await until(async () => {
@@ -253,7 +270,12 @@ for (const [mode, activeTheme, producerFirst] of [
         });
         let output = await snapshot();
         assert.ok(!output.includes("Width-aware compositor"), output);
-        assert.match(output, /"diagnostics":\s*\[\]/);
+        assert.ok(
+          output.includes(
+            "Synthetic background diagnostic retained across reload",
+          ),
+          output,
+        );
         assert.ok(output.includes("(ro)"));
         assert.ok(output.includes("C W2%"));
         assert.ok(output.includes("ordinary"));
@@ -480,7 +502,12 @@ for (const [mode, activeTheme, producerFirst] of [
         );
         output = await snapshot();
         assert.ok(!output.includes("Width-aware compositor"), output);
-        assert.match(output, /"diagnostics":\s*\[\]/);
+        assert.ok(
+          output.includes(
+            "Synthetic background diagnostic retained across reload",
+          ),
+          output,
+        );
         await tmux.call("resize-window", "-t", pane, "-x", "100", "-y", "60");
         await tmux.call("send-keys", "-t", pane, "/tmux-monitor t s", "Enter");
         await until(async () =>

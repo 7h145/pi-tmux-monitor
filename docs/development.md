@@ -21,6 +21,7 @@ The main files are:
 | --- | --- |
 | `pi-tmux-monitor.ts` | Pi lifecycle events, commands and launch-context publication |
 | `src/tmux.mts` | Bounded tmux calls, local-option reads and guarded writes |
+| `src/diagnostics.mts` | Bounded diagnostic storage and fixed runner diagnostic codes |
 | `src/protocol.mts` | Validation of versioned status records and lineage |
 | `src/observer.mts` | Server selection, inventory, scan age and cached expiry |
 | `src/reconcile.mts` | Ownership, freshness and generation-bound presentation history |
@@ -51,6 +52,9 @@ record formats.
 
 Records contain IDs, ancestry, task kind, phase/state, sequence and exit
 status—not prompts, arguments, terminal output, credentials or task results.
+Command records may also carry a `diagnostics` array containing unique codes
+from `RUNNER_DIAGNOSTICS`, never arbitrary error text. The observer translates
+these fixed codes for on-demand diagnostics.
 Socket users can forge them; they provide cooperative status evidence,
 not authentication or result validation. Launch arguments still pass to
 tmux and may be visible through ordinary process/socket access.
@@ -120,7 +124,7 @@ the dynamic capability exists. The compositor remains the only footer owner.
 
 Fallback publication is immediate. After initial observation finishes,
 the monitor allows one poll interval for capability discovery before one
-absence warning. Registration, reload and shutdown cancel pending warnings;
+absence diagnostic. Registration, reload and shutdown cancel pending checks;
 persistent capability loss uses the same grace period. Diagnostics reports
 `dynamic-v1`, the status key and any problems.
 
@@ -157,6 +161,21 @@ Measure with Pi TUI's `visibleWidth`, excluding ANSI SGR sequences. Rendering
 must be synchronous, single-line, free of I/O and side effects, and no wider
 than the allocated budget. Use the passed theme rather than cached ANSI.
 Preserve `fullSummary()` for static fallback if replacing the formatter.
+
+## Diagnostic delivery
+
+Background diagnostics are recorded without UI notices, console/stderr output or
+conversation entries. The process keeps up to 16 distinct messages of at most
+320 characters each, including cleanup problems across extension reloads. The
+explicit diagnostics command exposes them. Recording a problem does not change
+footer state, cache retention or workload results.
+
+Runner diagnostics travel with its existing job record. Failed writes remain
+pending for a later successful write; a lost or replaced server can prevent
+transport, just as it can prevent state reporting. There is no filesystem or
+notification fallback. Requested command/helper responses, startup failure
+acknowledgements and error output still return normally. Child workload stdout,
+stderr and exit codes pass through unchanged.
 
 ## Commands and integration points
 

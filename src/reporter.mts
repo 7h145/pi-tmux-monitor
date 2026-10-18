@@ -36,8 +36,8 @@ export class Reporter {
     this.paneId = paneId;
     try {
       this.serverIdentity = await this.tmux.ownIdentity(this.env.TMUX);
-      const job = await this.tmux.record("job", paneId),
-        prior = await this.tmux.record("pi", paneId);
+      const job = await this.tmux.record("job", paneId, this.diagnostic),
+        prior = await this.tmux.record("pi", paneId, this.diagnostic);
       this.predecessor = prior?.instanceId;
       if (this.retired) return;
       let bound = null;
@@ -60,7 +60,7 @@ export class Reporter {
           paneId,
           "#{session_id}",
         );
-        const context = await this.tmux.record("owner", sid);
+        const context = await this.tmux.record("owner", sid, this.diagnostic);
         if (context) {
           parentSessionId = context.ownerSessionId;
           ancestors = [...context.ancestors, parentSessionId];
@@ -124,7 +124,11 @@ export class Reporter {
           this.diagnostic("Pi reporter server was replaced; reporting stopped");
           return;
         }
-        const current = await this.tmux.record("pi", this.paneId);
+        const current = await this.tmux.record(
+          "pi",
+          this.paneId,
+          this.diagnostic,
+        );
         if (this.retired) return;
         if (
           current &&
@@ -136,7 +140,11 @@ export class Reporter {
           return;
         }
         if (snapshot.jobId) {
-          const job = await this.tmux.record("job", this.paneId);
+          const job = await this.tmux.record(
+            "job",
+            this.paneId,
+            this.diagnostic,
+          );
           if (
             !matches(job, snapshot) ||
             job.phase !== "running" ||

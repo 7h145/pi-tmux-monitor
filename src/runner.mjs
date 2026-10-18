@@ -26,6 +26,9 @@ export async function run(plan, env = process.env) {
     heartbeatSeq: 0,
     exitCode: null,
   };
+  const diagnostic = (code) => {
+    record.diagnostics = [...new Set([...(record.diagnostics ?? []), code])];
+  };
   let queue = Promise.resolve(),
     lost = false,
     stopped = false;
@@ -36,7 +39,7 @@ export async function run(plan, env = process.env) {
         if (lost) return;
         if ((await tmux.identity()) !== serverIdentity) {
           lost = true;
-          console.error("Monitor server replaced; command reporting stopped");
+          diagnostic("server-replaced");
           return;
         }
         const current = await tmux.record("job", pane);
@@ -44,14 +47,14 @@ export async function run(plan, env = process.env) {
           lost = true;
           return;
         }
+        // An earlier queued write can fail after this snapshot was taken.
+        if (record.diagnostics) snapshot.diagnostics = [...record.diagnostics];
         await tmux.write("job", pane, snapshot, {
           serverIdentity,
           allowAbsent: !current,
         });
       })
-      .catch(() =>
-        console.error("Monitor command registration/heartbeat failed"),
-      );
+      .catch(() => diagnostic("write-failed"));
     return queue;
   };
   // Managed launch clears the prior reporter before recording this generation.
@@ -59,12 +62,12 @@ export async function run(plan, env = process.env) {
   if (old)
     await tmux
       .removeOwned("pi", pane, "instanceId", old.instanceId)
-      .catch(() => console.error("Monitor reporter cleanup failed"));
+      .catch(() => diagnostic("reporter-cleanup-failed"));
   const previous = await tmux.record("job", pane).catch(() => null);
   if (previous)
     await tmux
       .removeOwned("job", pane, "jobId", previous.jobId)
-      .catch(() => console.error("Monitor prior-job cleanup failed"));
+      .catch(() => diagnostic("job-cleanup-failed"));
   await write();
   const acknowledge = async (state, reason) => {
     if (!plan.ackPath) return;

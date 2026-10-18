@@ -125,7 +125,6 @@ export class Reconciler {
         g.reporterLost = true;
         this.diagnostic(
           `No fresh application state for pane ${p.paneId}; internal activity is unknown`,
-          { notify: false },
         );
       }
       let state = "unknown";
