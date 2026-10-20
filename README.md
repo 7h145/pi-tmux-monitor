@@ -1,7 +1,7 @@
 # pi-tmux-monitor
 
-See the state of your background Pi sessions and commands without switching
-between tmux terminals.
+Keep track of background Pi sessions and commands running in
+[tmux](https://github.com/tmux/tmux), without switching terminals.
 
 - [What this is](#what-this-is)
 - [Requirements](#requirements)
@@ -16,11 +16,11 @@ between tmux terminals.
 
 ## What this is
 
-When Pi has tests running in one terminal, a service in another and a second
-Pi session working elsewhere, it is easy to lose track of them.
-pi-tmux-monitor adds a small indicator to Pi's footer so you can see which
-are active, idle, still running or finished. Open its status view when you
-need to know which task a symbol belongs to.
+pi-tmux-monitor is for background work run in tmux: tests, services and
+other Pi sessions. It adds a small indicator to Pi's footer so you can
+see which tasks are active, idle, still running or finished. Open its
+status view when you need to know which task a symbol belongs to.
+Work running outside tmux is not monitored.
 
 A tmux pane is a terminal within a tmux window. The indicator summarizes
 the panes you are monitoring, using symbols or counts. Pi sessions running
@@ -29,9 +29,12 @@ they are running or have exited. The monitor does not guess activity from
 terminal output, CPU use or process names.
 
 The package includes the Pi extension, a skill that teaches Pi how to start
-monitored tasks, and a command-line script for starting them yourself. You
-can inspect their terminals with ordinary tmux. Monitoring does not take
-control of those terminals or decide whether a task's result is correct.
+monitored tasks, and a command-line script for starting them yourself.
+You can also use the included skill and commands to check or start a
+project-local tmux server. You can inspect their terminals with ordinary
+tmux.
+
+For tmux basics, see the [community guides at tmux.app](https://tmux.app/).
 
 ## Requirements
 
